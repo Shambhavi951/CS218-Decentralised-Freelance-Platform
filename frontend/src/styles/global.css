@@ -1,0 +1,114 @@
+/* ────────────────────────────────────────────────────────────────────────────
+   global.css  —  reset, CSS variables, base typography, utilities
+──────────────────────────────────────────────────────────────────────────── */
+
+@import url('https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800&family=JetBrains+Mono:wght@400;500&family=Outfit:wght@300;400;500;600&display=swap');
+
+/* ── Variables ─────────────────────────────────────────────────────────── */
+:root {
+  --bg:        #07070a;
+  --bg2:       #0d0d12;
+  --card:      #111118;
+  --card2:     #18181f;
+  --border:    #1e1e28;
+  --border2:   #2a2a38;
+  --text:      #ededf5;
+  --text2:     #8888a4;
+  --text3:     #55556a;
+
+  --amber:     #f59e0b;
+  --amber-bg:  rgba(245, 158, 11, 0.10);
+  --sky:       #38bdf8;
+  --sky-bg:    rgba(56, 189, 248, 0.10);
+  --green:     #4ade80;
+  --red:       #f87171;
+  --orange:    #fb923c;
+
+  --font-display: 'Syne', sans-serif;
+  --font-body:    'Outfit', sans-serif;
+  --font-mono:    'JetBrains Mono', monospace;
+
+  --radius-sm:  6px;
+  --radius:     10px;
+  --radius-lg:  14px;
+
+  --shadow-md: 0 8px 24px rgba(0,0,0,.40);
+  --shadow-lg: 0 24px 60px rgba(0,0,0,.60);
+}
+
+/* ── Reset ─────────────────────────────────────────────────────────────── */
+*, *::before, *::after {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html { font-size: 15px; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-body);
+  min-height: 100vh;
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* dot-grid atmosphere */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image: radial-gradient(circle, #ffffff05 1px, transparent 1px);
+  background-size: 28px 28px;
+  pointer-events: none;
+  z-index: 0;
+}
+
+#root { position: relative; z-index: 1; }
+
+/* ── Scrollbar ─────────────────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: var(--bg2); }
+::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+
+/* ── Animations ────────────────────────────────────────────────────────── */
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(22px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.anim-fade-up  { animation: fadeUp  .32s cubic-bezier(.16,1,.3,1) both; }
+.anim-slide-up { animation: slideUp .38s cubic-bezier(.16,1,.3,1) both; }
+
+/* ── Utilities ─────────────────────────────────────────────────────────── */
+input, textarea, button { font-family: inherit; }
+input:focus, textarea:focus { outline: none; }
+button { cursor: pointer; }
+
+.page-section {
+  animation: fadeUp .32s cubic-bezier(.16,1,.3,1) both;
+}
+
+/* section heading used by every page */
+.section-heading {
+  font-family: var(--font-display);
+  font-size: 20px;
+  font-weight: 700;
+  margin-bottom: 20px;
+}
+
+/* empty-state block */
+.empty-state {
+  text-align: center;
+  padding: 56px 24px;
+  color: var(--text3);
+}
+.empty-state__icon { font-size: 36px; margin-bottom: 12px; }
