@@ -1,0 +1,178 @@
+/* ── Freelancer / Jobs ───────────────────────────────────────────────────── */
+.fjobs-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* Job row card */
+.fjob-card {
+  display: flex;
+  gap: 18px;
+  align-items: flex-start;
+  border-left: 3px solid;
+}
+.fjob-card__body { flex: 1; min-width: 0; }
+
+.fjob-card__meta {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+}
+.fjob-card__id {
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  color: var(--amber);
+  font-weight: 700;
+}
+.fjob-card__svc-id {
+  font-size: 12.5px;
+  color: var(--text3);
+}
+
+.fjob-card__grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text2);
+  margin-bottom: 8px;
+}
+.fjob-card__grid b {
+  font-family: var(--font-mono);
+  font-weight: 700;
+}
+.fjob-card__deadline--expired { color: var(--red); }
+.fjob-card__autorelease-time  { color: var(--sky); }
+
+/* Client Reputation Display */
+.fjob-card__client-rep {
+  margin-top: 8px;
+}
+
+.fjob-card__client-rep-btn {
+  background: #1a1a2e;
+  border: 1px solid #2a2a4e;
+  border-radius: var(--radius-sm);
+  padding: 6px 12px;
+  font-size: 12px;
+  color: var(--text2);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-weight: 500;
+}
+
+.fjob-card__client-rep-btn:hover {
+  background: #2a2a4e;
+  border-color: #3a3a5e;
+  color: var(--text1);
+}
+
+/* Client Reputation Modal */
+.client-rep-modal {
+  text-align: center;
+  padding: 20px 0;
+}
+
+.client-rep-modal__address {
+  margin-bottom: 20px;
+}
+
+.client-rep-modal__score {
+  margin-bottom: 24px;
+}
+
+.client-rep-modal__score-value {
+  font-size: 32px;
+  font-weight: 700;
+  color: #fbbf24;
+  margin-bottom: 8px;
+}
+
+.client-rep-modal__stars {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 8px;
+}
+
+.client-rep-modal__stats {
+  display: flex;
+  justify-content: center;
+  gap: 20px;
+}
+
+.client-rep-modal__stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.client-rep-modal__stat-label {
+  font-size: 12px;
+  color: var(--text3);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.client-rep-modal__stat-value {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text1);
+}
+
+.client-rep-modal__none {
+  margin-top: 16px;
+  color: var(--text3);
+  font-size: 13px;
+}
+
+/* Work status strip */
+.fjob-card__work {
+  border-radius: var(--radius-sm);
+  padding: 8px 12px;
+  font-size: 12.5px;
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  flex-direction: column;
+}
+.fjob-card__work--submitted {
+  background: #0d2b18;
+  border: 1px solid #166534;
+  color: var(--green);
+}
+.fjob-card__work--locked {
+  background: #06253333;
+  border: 1px solid #0c4a6e55;
+  color: var(--sky);
+}
+.fjob-card__work-cid {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--text3);
+}
+
+/* Actions column */
+.fjob-card__actions {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  flex-shrink: 0;
+}
+.fjob-card__rated {
+  font-size: 12px;
+  color: var(--green);
+}
+
+/* Submit work modal */
+.submit-work__info {
+  /* styled via InfoBox */
+}
+
+@media (max-width: 560px) {
+  .fjob-card { flex-direction: column; }
+  .fjob-card__grid { grid-template-columns: 1fr; }
+}

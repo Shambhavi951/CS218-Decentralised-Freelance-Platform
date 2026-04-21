@@ -1,0 +1,157 @@
+/* ── Client / Browse ─────────────────────────────────────────────────────── */
+.browse-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(290px, 1fr));
+  gap: 14px;
+}
+
+/* Browse service card */
+.browse-card {
+  border-left: 3px solid var(--sky);
+  display: flex;
+  flex-direction: column;
+  transition: border-color .2s;
+}
+.browse-card:hover { border-color: var(--sky); }
+
+.browse-card__top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+.browse-card__id {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text3);
+}
+
+.browse-card__title {
+  font-size: 15.5px;
+  font-weight: 600;
+  margin-bottom: 5px;
+}
+.browse-card__desc {
+  font-size: 13px;
+  color: var(--text2);
+  flex: 1;
+  line-height: 1.55;
+  margin-bottom: 16px;
+}
+
+/* Freelancer Reputation */
+.browse-card__freelancer-rep {
+  margin-bottom: 12px;
+}
+
+.browse-card__freelancer-rep-btn {
+  background: #1a1a2e;
+  border: 1px solid #2a2a4e;
+  border-radius: var(--radius-sm);
+  padding: 6px 12px;
+  font-size: 12px;
+  color: var(--text2);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-weight: 500;
+}
+
+.browse-card__freelancer-rep-btn:hover {
+  background: #2a2a4e;
+  border-color: #3a3a5e;
+  color: var(--text1);
+}
+
+.browse-card__footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.browse-card__price {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  color: var(--sky);
+  font-size: 16px;
+}
+
+/* Hire confirmation modal */
+.hire-modal__preview {
+  background: var(--card2);
+  border-radius: var(--radius);
+  padding: 16px;
+}
+.hire-modal__preview-title {
+  font-size: 15.5px;
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+.hire-modal__preview-desc {
+  font-size: 13px;
+  color: var(--text2);
+  line-height: 1.55;
+  margin-bottom: 12px;
+}
+.hire-modal__preview-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.hire-modal__preview-price {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  color: var(--sky);
+  font-size: 18px;
+}
+
+/* Freelancer Reputation Modal */
+.freelancer-rep-modal {
+  text-align: center;
+  padding: 20px 0;
+}
+
+.freelancer-rep-modal__address {
+  margin-bottom: 20px;
+}
+
+.freelancer-rep-modal__score {
+  margin-bottom: 24px;
+}
+
+.freelancer-rep-modal__score-value {
+  font-size: 32px;
+  font-weight: 700;
+  color: #10b981;
+  margin-bottom: 8px;
+}
+
+.freelancer-rep-modal__stars {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 8px;
+}
+
+.freelancer-rep-modal__stats {
+  display: flex;
+  justify-content: center;
+  gap: 20px;
+}
+
+.freelancer-rep-modal__stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.freelancer-rep-modal__stat-label {
+  font-size: 12px;
+  color: var(--text3);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.freelancer-rep-modal__stat-value {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text1);
+}
