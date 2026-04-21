@@ -1,0 +1,155 @@
+/* ────────────────────────────────────────────────────────────────────────────
+   ui.css  —  shared primitive components: Btn, Card, Input, Spinner, Stars…
+──────────────────────────────────────────────────────────────────────────── */
+
+/* ── Spinner ───────────────────────────────────────────────────────────── */
+.ui-spinner {
+  border-radius: 50%;
+  border: 2px solid rgba(255,255,255,.08);
+  border-top-color: var(--amber);
+  display: inline-block;
+  flex-shrink: 0;
+  animation: spin .65s linear infinite;
+}
+
+/* ── Button ────────────────────────────────────────────────────────────── */
+.ui-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 20px;
+  font-size: 14px;
+  border-radius: var(--radius-sm);
+  border: none;
+  font-family: var(--font-body);
+  font-weight: 600;
+  white-space: nowrap;
+  transition: opacity .15s, filter .15s;
+  cursor: pointer;
+}
+.ui-btn--sm   { padding: 6px 14px; font-size: 12.5px; }
+.ui-btn:disabled { opacity: .5; cursor: not-allowed; }
+.ui-btn:not(:disabled):hover { filter: brightness(1.15); }
+
+/* variants */
+.ui-btn--primary {
+  background: var(--btn-accent, var(--amber));
+  color: #000;
+  font-weight: 700;
+}
+.ui-btn--outline {
+  background: transparent;
+  color: var(--btn-accent, var(--amber));
+  border: 1px solid color-mix(in srgb, var(--btn-accent, var(--amber)) 35%, transparent);
+}
+.ui-btn--ghost {
+  background: transparent;
+  color: var(--text2);
+  border: 1px solid var(--border);
+  font-weight: 500;
+}
+.ui-btn--danger {
+  background: #2b0c0c;
+  color: var(--red);
+  border: 1px solid rgba(127,29,29,.35);
+}
+.ui-btn--success {
+  background: #0d2b18;
+  color: var(--green);
+  border: 1px solid rgba(22,101,52,.4);
+}
+
+/* ── Card ──────────────────────────────────────────────────────────────── */
+.ui-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 20px;
+  transition: border-color .2s;
+}
+
+/* ── Form fields ───────────────────────────────────────────────────────── */
+.ui-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.ui-field__label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text3);
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+
+.ui-input,
+.ui-textarea {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 10px 14px;
+  color: var(--text);
+  font-size: 14px;
+  font-family: var(--font-body);
+  transition: border-color .18s;
+  width: 100%;
+}
+.ui-input:focus,
+.ui-textarea:focus { border-color: rgba(245,158,11,.4); }
+.ui-input--mono { font-family: var(--font-mono); font-size: 13px; }
+.ui-textarea    { resize: vertical; }
+
+/* ── Stars ─────────────────────────────────────────────────────────────── */
+.ui-stars { display: flex; gap: 3px; }
+.ui-stars__star {
+  font-size: 22px;
+  color: var(--border2);
+  cursor: pointer;
+  transition: color .12s;
+  user-select: none;
+}
+.ui-stars__star--active  { color: var(--amber); }
+.ui-stars__star--readonly { cursor: default; }
+
+/* ── Chip ──────────────────────────────────────────────────────────────── */
+.ui-chip {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--text2);
+  background: var(--card2);
+  border: 1px solid var(--border);
+  padding: 2px 8px;
+  border-radius: 5px;
+  display: inline-block;
+}
+
+/* ── InfoBox ───────────────────────────────────────────────────────────── */
+.ui-infobox {
+  border-radius: var(--radius-sm);
+  padding: 10px 14px;
+  font-size: 12.5px;
+  line-height: 1.55;
+}
+
+/* ── Tabs ──────────────────────────────────────────────────────────────── */
+.ui-tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 20px;
+  border-bottom: 1px solid var(--border);
+}
+.ui-tabs__tab {
+  background: transparent;
+  border: none;
+  padding: 8px 16px;
+  font-size: 14px;
+  color: var(--text2);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition: color .15s, border-color .15s;
+}
+.ui-tabs__tab:hover { color: var(--text); }
+.ui-tabs__tab--active {
+  color: var(--amber);
+  border-bottom-color: var(--amber);
+}
