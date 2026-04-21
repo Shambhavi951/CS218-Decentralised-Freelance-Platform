@@ -5,104 +5,100 @@ import "../../styles/pages/client/Rate.css";
 import { Btn, Card, Stars, Chip, Tabs, InfoBox } from "../../components/ui";
 import Modal from "../../components/Modal";
 
-import { ABI } from "../../constants/abi";
-import { CONTRACT_ADDRESS } from "../../constants/config";
+import { CONTRACT_ADDRESS, MIN_STAKE } from "../../constants/config";
 import { loadMeta } from "../../utils/ipfs";
 import { fmtEth } from "../../utils/helpers";
+import {
+  getFeedbackToken,
+  submitFeedback,
+  finalizeReview,
+  depositStake,
+} from "../../utils/contractHelpers";
+import { ABI } from "../../constants/abi";
 
-const MIN_STAKE = ethers.parseEther("0.05");
+const MIN_STAKE_WEI = ethers.parseEther("0.05");
 
 const Rate = ({ account, signer, provider, toast }) => {
-  const [mode, setMode] = useState('commit'); // 'commit' or 'reveal'
-  const [jobs, setJobs] = useState([]);
-  const [revealJobs, setRevealJobs] = useState([]);
+  const [tab, setTab] = useState('pending'); // 'pending' or 'finalize'
+  const [pendingJobs, setPendingJobs] = useState([]);
+  const [expiredJobs, setExpiredJobs] = useState([]);
   const [rateJob, setRateJob] = useState(null);
-  const [stars, setStars] = useState(0);
+  const [score, setScore] = useState(0);
   const [busy, setBusy] = useState(false);
   const [userStake, setUserStake] = useState(0n);
+  const [hasStake, setHasStake] = useState(false);
 
   /* ── Load ─────────────────────────────────────────────────────────── */
   useEffect(() => {
     loadChain();
-  }, [account, mode]); // eslint-disable-line
+  }, [account, tab]); // eslint-disable-line
 
   const loadChain = async () => {
-    if (!signer && !provider) return;
+    if (!account || !provider) return;
     try {
-      // Debug: Check if ABI is loaded correctly
-      console.log("ABI imported:", ABI);
-      console.log("ABI length:", ABI?.length);
-      console.log("ABI type:", typeof ABI);
-      
-      const c = new ethers.Contract(CONTRACT_ADDRESS, ABI, provider ?? signer);
-      
-      // Debug: Log contract instance details
-      console.log("Contract Address:", CONTRACT_ADDRESS);
-      console.log("Provider:", provider ? "Connected" : "Not connected");
-      console.log("Signer:", signer ? "Connected" : "Not connected");
-      console.log("Contract instance methods:", Object.keys(c).filter(k => typeof c[k] === 'function').slice(0, 20));
-      
-      // Check if stakes method exists
-      if (typeof c.stakes !== 'function') {
-        console.error("stakes is not a function. Available methods:", Object.keys(c).filter(k => k.includes('stake')));
-        throw new Error("Contract method 'stakes' not found. Make sure the contract is deployed correctly.");
-      }
+      const contract = new ethers.Contract(CONTRACT_ADDRESS, ABI, provider);
 
-      const svcCnt = Number(await c.serviceCount());
-      const jobCnt = Number(await c.jobCount());
-      const stake = await c.stakes(account);
+      // Get user stake
+      const stake = await contract.stakes(account);
       setUserStake(stake);
+      const sufficient = stake >= MIN_STAKE_WEI;
+      setHasStake(sufficient);
 
+      // Get service info map
+      const svcCnt = Number(await contract.serviceCount());
       const svcMap = {};
       for (let i = 1; i <= svcCnt; i++) {
-        const s = await c.getService(i);
+        const s = await contract.getService(i);
         const m = loadMeta(s.metadataCid) ?? {};
         svcMap[i] = { title: m.title ?? "Untitled", freelancer: s.freelancer };
       }
 
-      if (mode === 'commit') {
-        const list = [];
-        for (let i = 1; i <= jobCnt; i++) {
-          const j = await c.getJob(i);
-          if (
-            j.client.toLowerCase() !== account.toLowerCase() ||
-            Number(j.status) !== 2 ||
-            j.clientRated
-          ) continue;
-          const svc = svcMap[Number(j.serviceId)] ?? {};
-          list.push({
-            id: i,
-            amount: j.amount.toString(),
-            title: svc.title ?? "Untitled",
-            freelancer: svc.freelancer ?? "",
-          });
-        }
-        setJobs(list);
-      } else {
-        const list = [];
-        const stored = JSON.parse(localStorage.getItem('ratings') || '{}');
-        for (let i = 1; i <= jobCnt; i++) {
-          const j = await c.getJob(i);
-          if (
-            j.client.toLowerCase() !== account.toLowerCase() ||
-            Number(j.status) !== 2 ||
-            !j.clientRated
-          ) continue;
+      // Get jobs where this account is the client
+      const jobCnt = Number(await contract.jobCount());
+      const pendingList = [];
+      const expiredList = [];
 
-          const tokens = await c.getJobTokens(i);
-          const tokenId = tokens[0];
-          if (!stored[tokenId.toString()]) continue;
+      for (let i = 1; i <= jobCnt; i++) {
+        const job = await contract.getJob(i);
 
-          const svc = svcMap[Number(j.serviceId)] ?? {};
-          list.push({
-            id: i,
-            amount: j.amount.toString(),
-            title: svc.title ?? "Untitled",
-            freelancer: svc.freelancer ?? "",
-          });
+        // Only show completed jobs
+        if (Number(job.status) !== 2) continue; // 2 = Done
+
+        // Only show if current account is the client
+        if (job.client.toLowerCase() !== account.toLowerCase()) continue;
+
+        // Get feedback tokens for this job
+        const [clientTokenId, freelancerTokenId] = await contract.getJobTokens(i);
+        
+        // Client rates freelancer (uses clientTokenId)
+        if (Number(clientTokenId) === 0) continue;
+
+        const token = await getFeedbackToken(Number(clientTokenId), provider);
+        const svc = svcMap[Number(job.serviceId)] ?? {};
+
+        const jobData = {
+          jobId: i,
+          tokenId: token.tokenId,
+          token,
+          amount: job.amount.toString(),
+          title: svc.title ?? "Untitled",
+          freelancer: svc.freelancer ?? "",
+          reviewee: job.freelancer || svc.freelancer // Person being rated
+        };
+
+        if (token.used) {
+          // Already submitted - check if it needs finalization
+          if (token.isExpired && !token.applied) {
+            expiredList.push(jobData);
+          }
+        } else {
+          // Not yet submitted
+          pendingList.push(jobData);
         }
-        setRevealJobs(list);
       }
+
+      setPendingJobs(pendingList);
+      setExpiredJobs(expiredList);
     } catch (e) {
       console.error("loadChain error:", e);
       toast("Failed to load jobs: " + e.message, "error");
@@ -113,15 +109,13 @@ const Rate = ({ account, signer, provider, toast }) => {
   const handleDepositStake = async () => {
     setBusy(true);
     try {
-      const activeSigner = signer ?? provider?.getSigner();
-      if (!activeSigner) {
+      if (!signer) {
         toast("Connect your wallet first", "error");
         setBusy(false);
         return;
       }
 
-      const c = new ethers.Contract(CONTRACT_ADDRESS, ABI, activeSigner);
-      const tx = await c.depositStake({ value: MIN_STAKE });
+      const tx = await depositStake(MIN_STAKE_WEI, signer);
       toast("Depositing stake…");
       await tx.wait();
       toast("Stake deposited!", "success");
@@ -132,91 +126,60 @@ const Rate = ({ account, signer, provider, toast }) => {
     setBusy(false);
   };
 
-  /* ── Commit Rating ────────────────────────────────────────────────── */
-  const handleCommit = async () => {
-    if (!stars) { toast("Select a star rating", "error"); return; }
-    if (userStake < MIN_STAKE) {
+  /* ── Submit Feedback ──────────────────────────────────────────────── */
+  const handleSubmitFeedback = async () => {
+    if (!score) {
+      toast("Select a star rating", "error");
+      return;
+    }
+
+    if (!hasStake) {
       toast("Insufficient stake. Deposit at least 0.05 ETH", "error");
       return;
     }
+
     setBusy(true);
     try {
-      const activeSigner = signer ?? provider?.getSigner();
-      if (!activeSigner) {
+      if (!signer) {
         toast("Connect your wallet first", "error");
         setBusy(false);
         return;
       }
 
-      const c = new ethers.Contract(CONTRACT_ADDRESS, ABI, activeSigner);
-      const tokens = await c.getJobTokens(rateJob);
-      const tokenId = tokens[0]; // client token
-
-      // Generate random salt
-      const salt = ethers.hexlify(ethers.randomBytes(32));
-
-      // Compute hash
-      const hash = ethers.keccak256(ethers.AbiCoder.defaultAbiCoder().encode(['uint256', 'string'], [stars, salt]));
-
-      const tx = await c.commitFeedback(tokenId, hash);
-      toast("Committing rating…");
+      const tx = await submitFeedback(rateJob.tokenId, score, signer);
+      toast("Submitting feedback…");
       await tx.wait();
-
-      // Store score and salt in localStorage
-      const stored = JSON.parse(localStorage.getItem('ratings') || '{}');
-      stored[tokenId.toString()] = { score: stars, salt };
-      localStorage.setItem('ratings', JSON.stringify(stored));
-
-      toast("Rating committed!", "success");
+      toast("Feedback submitted!", "success");
+      
       await loadChain();
       setRateJob(null);
-      setStars(0);
+      setScore(0);
     } catch (e) {
       toast(e.reason ?? e.message ?? "Failed", "error");
     }
     setBusy(false);
   };
 
-  /* ── Reveal Rating ────────────────────────────────────────────────── */
-  const handleReveal = async (jobId) => {
+  /* ── Finalize Review ──────────────────────────────────────────────── */
+  const handleFinalizeReview = async (jobId) => {
     setBusy(true);
     try {
-      const activeSigner = signer ?? provider?.getSigner();
-      if (!activeSigner) {
+      if (!signer) {
         toast("Connect your wallet first", "error");
         setBusy(false);
         return;
       }
 
-      const c = new ethers.Contract(CONTRACT_ADDRESS, ABI, activeSigner);
-      const tokens = await c.getJobTokens(jobId);
-      const tokenId = tokens[0];
-
-      const stored = JSON.parse(localStorage.getItem('ratings') || '{}');
-      const data = stored[tokenId.toString()];
-      if (!data) {
-        toast("Rating data not found", "error");
-        setBusy(false);
-        return;
-      }
-
-      const tx = await c.revealFeedback(tokenId, data.score, data.salt);
-      toast("Revealing rating…");
+      const tx = await finalizeReview(jobId, signer);
+      toast("Finalizing review…");
       await tx.wait();
-
-      // Remove from localStorage
-      delete stored[tokenId.toString()];
-      localStorage.setItem('ratings', JSON.stringify(stored));
-
-      toast("Rating revealed!", "success");
+      toast("Review finalized!", "success");
       await loadChain();
     } catch (e) {
       toast(e.reason ?? e.message ?? "Failed", "error");
     }
     setBusy(false);
   };
-
-  const currentJobs = mode === 'commit' ? jobs : revealJobs;
 
   /* ── Render ───────────────────────────────────────────────────────── */
   return (

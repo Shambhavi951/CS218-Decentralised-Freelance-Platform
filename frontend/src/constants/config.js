@@ -13,6 +13,9 @@ export const CHAIN_ID =
 // CONSTANTS
 // ─────────────────────────────────────────────
 
+// Minimum stake required to submit feedback (in wei)
+export const MIN_STAKE = "50000000000000000"; // 0.05 ETH
+
 // Empty CID (means no work submitted / cleared)
 export const ZERO_CID =
   "0x0000000000000000000000000000000000000000000000000000000000000000";
