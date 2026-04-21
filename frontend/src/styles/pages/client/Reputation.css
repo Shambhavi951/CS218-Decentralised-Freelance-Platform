@@ -1,0 +1,67 @@
+/* ── Client / Reputation ───────────────────────────────────────────── */
+.client-rep-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  max-width: 480px;
+  /* margin: 0 auto; */
+}
+
+.client-rep-card {
+  text-align: center;
+  padding: 40px 24px;
+}
+
+.client-rep-card__score {
+  font-family: var(--font-display);
+  font-size: 54px;
+  font-weight: 800;
+  line-height: 1;
+  color: #38bdf8;
+}
+
+.client-rep-card__stars {
+  display: flex;
+  justify-content: center;
+  margin: 10px 0;
+}
+
+.client-rep-card__label {
+  color: var(--text2);
+  font-size: 13px;
+  margin-top: 4px;
+}
+
+.client-rep-card__stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.client-rep-card__stat-value {
+  font-family: var(--font-display);
+  font-size: 54px;
+  font-weight: 800;
+  line-height: 1;
+  color: var(--text);
+}
+
+.client-rep-card__stat-label {
+  color: var(--text2);
+  font-size: 13px;
+}
+
+.client-rep-card__none {
+  margin-top: 18px;
+  color: var(--text3);
+  font-size: 13px;
+  text-align: center;
+}
+
+@media (max-width: 420px) {
+  .client-rep-grid {
+    grid-template-columns: 1fr;
+    max-width: 260px;
+  }
+}

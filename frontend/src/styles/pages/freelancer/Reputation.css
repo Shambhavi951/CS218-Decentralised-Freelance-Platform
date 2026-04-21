@@ -1,0 +1,44 @@
+/* ── Freelancer / Reputation ─────────────────────────────────────────────── */
+.rep-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  max-width: 480px;
+}
+
+.rep-card {
+  text-align: center;
+  padding: 40px 24px;
+}
+
+.rep-card__score {
+  font-family: var(--font-display);
+  font-size: 54px;
+  font-weight: 800;
+  line-height: 1;
+  color: var(--amber);
+}
+
+.rep-card__stars {
+  display: flex;
+  justify-content: center;
+  margin: 10px 0;
+}
+
+.rep-card__label {
+  color: var(--text2);
+  font-size: 13px;
+  margin-top: 4px;
+}
+
+.rep-card__count {
+  font-family: var(--font-display);
+  font-size: 54px;
+  font-weight: 800;
+  line-height: 1;
+  color: var(--text);
+}
+
+@media (max-width: 420px) {
+  .rep-grid { grid-template-columns: 1fr; max-width: 260px; }
+}
