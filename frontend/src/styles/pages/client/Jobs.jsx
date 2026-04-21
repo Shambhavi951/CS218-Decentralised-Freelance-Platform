@@ -1,0 +1,203 @@
+import { useState, useEffect } from "react";
+import { ethers } from "ethers";
+import "../../styles/pages/client/Jobs.css";
+
+import { Btn, Card, Chip } from "../../components/ui";
+import StatusBadge          from "../../components/StatusBadge";
+
+import { ABI } from "../../constants/abi";
+import { CONTRACT_ADDRESS, NOW } from "../../constants/config";
+import { loadMeta } from "../../utils/ipfs";
+import { fmtEth, timeLeft, isZeroCid } from "../../utils/helpers";
+
+const ClientJobs = ({ account, signer, provider, toast, onRateNeeded }) => {
+  const [jobs, setJobs] = useState([]);
+  const [busy, setBusy] = useState(false);
+
+  /* ── Load ─────────────────────────────────────────────────────────── */
+  useEffect(() => {
+    loadChain();
+  }, [account]); // eslint-disable-line
+
+  const loadChain = async () => {
+    if (!signer && !provider) return;
+    try {
+      const c      = new ethers.Contract(CONTRACT_ADDRESS, ABI, provider ?? signer);
+      const svcCnt = Number(await c.serviceCount());
+      const jobCnt = Number(await c.jobCount());
+
+      // Pre-fetch all services for title + freelancer
+      const svcMap = {};
+      for (let i = 1; i <= svcCnt; i++) {
+        const s = await c.getService(i);
+        const m = loadMeta(s.metadataCid) ?? {};
+        svcMap[i] = { title: m.title ?? "Untitled", freelancer: s.freelancer };
+      }
+
+      const list = [];
+      for (let i = 1; i <= jobCnt; i++) {
+        const j = await c.getJob(i);
+        if (j.client.toLowerCase() !== account.toLowerCase()) continue;
+        const svc = svcMap[Number(j.serviceId)] ?? {};
+        list.push({
+          id:              i,
+          client:          j.client,
+          serviceId:       Number(j.serviceId),
+          status:          Number(j.status),
+          clientRated:     j.clientRated,
+          freelancerRated: j.freelancerRated,
+          amount:          j.amount.toString(),
+          deadline:        Number(j.deadline),
+          submittedAt:     Number(j.submittedAt),
+          workCid:         j.workCid,
+          title:           svc.title      ?? "Untitled",
+          freelancer:      svc.freelancer ?? "",
+        });
+      }
+      setJobs(list);
+    } catch (e) {
+      toast("Failed to load jobs: " + e.message, "error");
+    }
+  };
+
+  /* ── Confirm ──────────────────────────────────────────────────────── */
+  const handleConfirm = async (jobId) => {
+    setBusy(true);
+    try {
+      const activeSigner = signer ?? provider?.getSigner();
+      if (!activeSigner) {
+        toast("Connect your wallet first", "error");
+        setBusy(false);
+        return;
+      }
+
+      const c  = new ethers.Contract(CONTRACT_ADDRESS, ABI, activeSigner);
+      const tx = await c.confirmCompletion(jobId);
+      toast("Confirming…");
+      await tx.wait();
+      toast("Work confirmed! Payment released.", "success");
+      await loadChain();
+      onRateNeeded?.();
+    } catch (e) {
+      toast(e.reason ?? e.message ?? "Failed", "error");
+    }
+    setBusy(false);
+  };
+
+  /* ── Cancel ───────────────────────────────────────────────────────── */
+  const handleCancel = async (jobId) => {
+    setBusy(true);
+    try {
+      const activeSigner = signer ?? provider?.getSigner();
+      if (!activeSigner) {
+        toast("Connect your wallet first", "error");
+        setBusy(false);
+        return;
+      }
+
+      const c  = new ethers.Contract(CONTRACT_ADDRESS, ABI, activeSigner);
+      const tx = await c.cancelJob(jobId);
+      toast("Cancelling…");
+      await tx.wait();
+      toast("Cancelled. Refund issued.", "success");
+      await loadChain();
+    } catch (e) {
+      toast(e.reason ?? e.message ?? "Failed", "error");
+    }
+    setBusy(false);
+  };
+
+  /* ── Render ───────────────────────────────────────────────────────── */
+  return (
+    <div className="page-section">
+      <h2 className="section-heading">My Hired Jobs</h2>
+
+      {jobs.length === 0 ? (
+        <Card>
+          <div className="empty-state">
+            <p>No jobs yet. Go browse and hire!</p>
+          </div>
+        </Card>
+      ) : (
+        <div className="cjobs-list">
+          {jobs.map((job) => {
+            const hasWork     = !isZeroCid(job.workCid);
+            const accentColor = ["#4ade80","#fb923c","#38bdf8","#f87171"][job.status];
+
+            return (
+              <Card key={job.id} className="cjob-card" style={{ borderLeftColor: accentColor }}>
+                {/* Body */}
+                <div className="cjob-card__body">
+                  <div className="cjob-card__meta">
+                    <span className="cjob-card__id">Job #{job.id}</span>
+                    <StatusBadge kind="job" status={job.status} />
+                    <span className="cjob-card__title">{job.title}</span>
+                  </div>
+
+                  <div className="cjob-card__grid">
+                    <div>Freelancer <Chip addr={job.freelancer} /></div>
+                    <div>Escrow <b>{fmtEth(job.amount)}</b></div>
+                    {job.status === 0 && (
+                      <div>
+                        Deadline{" "}
+                        <b className={NOW > job.deadline ? "cjob-card__deadline--expired" : ""}>
+                          {timeLeft(job.deadline)}
+                        </b>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Work submitted notice */}
+                  {job.status === 1 && hasWork && (
+                    <div className="cjob-card__work-notice">
+                      📦 Work submitted — review and confirm or cancel.
+                      <div className="cjob-card__work-cid">
+                        {job.workCid.slice(0, 36)}…
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Actions */}
+                <div className="cjob-card__actions">
+                  {job.status === 1 && (
+                    <>
+                      <Btn sm variant="success"
+                        onClick={() => handleConfirm(job.id)} loading={busy}>
+                        ✓ Confirm
+                      </Btn>
+                      <Btn sm variant="danger"
+                        onClick={() => handleCancel(job.id)} loading={busy}>
+                        ✗ Cancel
+                      </Btn>
+                    </>
+                  )}
+                  {job.status === 0 && (
+                    <Btn sm variant="danger"
+                      onClick={() => handleCancel(job.id)} loading={busy}>
+                      Cancel
+                    </Btn>
+                  )}
+                  {job.status === 2 && !job.clientRated && (
+                    <Btn sm variant="outline" accent="#38bdf8"
+                      onClick={onRateNeeded}>
+                      Rate ★
+                    </Btn>
+                  )}
+                  {job.status === 2 &&  job.clientRated && (
+                    <span className="cjob-card__rated">✓ Rated</span>
+                  )}
+                  {job.status === 3 && (
+                    <span className="cjob-card__refunded">Refunded</span>
+                  )}
+                </div>
+              </Card>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default ClientJobs;
