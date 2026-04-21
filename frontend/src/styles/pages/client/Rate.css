@@ -1,0 +1,52 @@
+/* ── Client / Rate ───────────────────────────────────────────────────────── */
+.rate-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.rate-card {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-left: 3px solid var(--sky);
+}
+.rate-card__info { flex: 1; min-width: 0; }
+
+.rate-card__meta {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 6px;
+}
+.rate-card__id {
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  color: var(--sky);
+}
+.rate-card__title { font-size: 14px; font-weight: 500; }
+
+.rate-card__sub {
+  font-size: 13px;
+  color: var(--text2);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.rate-card__sub b { font-family: var(--font-mono); font-weight: 600; }
+
+/* Rating modal — centred star picker */
+.rate-modal__prompt {
+  color: var(--text2);
+  margin-bottom: 16px;
+  font-size: 14px;
+}
+.rate-modal__stars-wrap {
+  text-align: center;
+  padding: 8px 0;
+}
+
+@media (max-width: 540px) {
+  .rate-card { flex-direction: column; gap: 14px; align-items: flex-start; }
+}
