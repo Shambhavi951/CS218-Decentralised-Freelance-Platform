@@ -1,0 +1,64 @@
+/* ── Freelancer / Services ───────────────────────────────────────────────── */
+.services-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.services-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(290px, 1fr));
+  gap: 14px;
+}
+
+/* Service card */
+.service-card {
+  border-left: 3px solid var(--amber);
+  display: flex;
+  flex-direction: column;
+}
+.service-card__top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 10px;
+}
+.service-card__id {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text3);
+}
+.service-card__title {
+  font-size: 15.5px;
+  font-weight: 600;
+  margin-bottom: 5px;
+}
+.service-card__desc {
+  font-size: 13px;
+  color: var(--text2);
+  flex: 1;
+  line-height: 1.55;
+  margin-bottom: 14px;
+}
+.service-card__footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.service-card__price {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  color: var(--amber);
+  font-size: 15px;
+}
+.service-card__cid {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text3);
+}
+
+/* Offer modal */
+.offer-modal__ipfs-note {
+  /* styled via InfoBox */
+}
