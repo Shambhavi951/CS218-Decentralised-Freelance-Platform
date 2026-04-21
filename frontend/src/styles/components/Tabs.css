@@ -1,0 +1,39 @@
+/* ── Tabs ────────────────────────────────────────────────────────────────── */
+.tabs {
+  display: flex;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 28px;
+  gap: 4px;
+}
+
+.tabs__btn {
+  position: relative;
+  background: none;
+  border: none;
+  padding: 11px 20px;
+  font-size: 14px;
+  font-family: var(--font-body);
+  cursor: pointer;
+  color: var(--text3);
+  font-weight: 400;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  transition: color .18s, border-color .18s;
+}
+.tabs__btn--active {
+  font-weight: 600;
+  /* color and border-color set inline via --tab-accent */
+  color: var(--tab-accent, var(--amber));
+  border-bottom-color: var(--tab-accent, var(--amber));
+}
+
+/* Notification dot */
+.tabs__dot {
+  position: absolute;
+  top: 10px;
+  right: 8px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--tab-accent, var(--amber));
+}
