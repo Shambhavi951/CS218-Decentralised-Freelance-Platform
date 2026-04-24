@@ -343,7 +343,7 @@ contract FreelanceEscrow is ReentrancyGuard {
         // If the job value is below 1 finney (1e15 wei), floor amountWeight to 1
         // by using 1e15 as the numerator instead of the actual amount.
         uint256 scaledAmount = amount >= 1e15 ? amount : 1e15;
-        return timeWeight * speedWeight * scaledAmount / 1e15;
+        return speedWeight * scaledAmount / 1e15;
     }
 
     /**

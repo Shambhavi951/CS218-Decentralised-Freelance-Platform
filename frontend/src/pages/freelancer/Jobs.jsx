@@ -67,7 +67,13 @@ const FreelancerJobs = ({ account, signer, provider, toast }) => {
         throw new Error("Contract method 'stakes' not found. Make sure the contract is deployed correctly.");
       }
 
-      const stake = await c.stakes(account);
+      let stake = 0n;
+      try {
+        stake = await c.stakes(account);
+      } catch (e) {
+        console.warn("Error fetching stakes:", e.message);
+        // Default to 0 if stakes call fails
+      }
       setUserStake(stake);
 
       if (mode === 'jobs') {
@@ -416,7 +422,7 @@ const FreelancerJobs = ({ account, signer, provider, toast }) => {
                         className="fjob-card__client-rep-btn"
                         onClick={() => setClientRepModal(job.client)}
                       >
-                        Client Reputation {clientReps[job.client].total > 0 ? `(${clientReps[job.client].total} rating${clientReps[job.client].total !== 1 ? 's' : ''})` : '(No ratings yet)'}
+                        Client Reputation {clientReps[job.client].jobs > 0 ? `(${clientReps[job.client].jobs} rating${clientReps[job.client].jobs !== 1 ? 's' : ''})` : '(No ratings yet)'}
                       </button>
                     </div>
                   )}

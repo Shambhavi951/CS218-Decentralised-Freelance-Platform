@@ -45,6 +45,7 @@ import { CHAIN_ID } from "./constants/config";
 import Services    from "./pages/freelancer/Services";
 import FreelancerJobs from "./pages/freelancer/Jobs";
 import Reputation  from "./pages/freelancer/Reputation";
+import Profile    from "./pages/freelancer/Profile";
 
 // Client pages
 import Browse     from "./pages/client/Browse";
@@ -57,6 +58,7 @@ const FREELANCER_TABS = [
   { key: "services", label: "My Services" },
   { key: "jobs",     label: "My Jobs"     },
   { key: "rep",      label: "Reputation"  },
+  { key: "profile",  label: "Profile"     },
 ];
 
 const CLIENT_TABS = [
@@ -135,6 +137,7 @@ const App = () => {
             {freelancerTab === "services" && <Services   {...pageProps} />}
             {freelancerTab === "jobs"     && <FreelancerJobs {...pageProps} />}
             {freelancerTab === "rep"      && <Reputation  {...pageProps} />}
+            {freelancerTab === "profile"  && <Profile     {...pageProps} />}
           </>
         )}
 

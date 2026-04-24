@@ -2,8 +2,8 @@
   "_format": "hh-sol-cache-2",
   "files": {
     "/Users/prashantmahto/Decentralised-freelancer/CS218-Decentralised-Freelance-Platform/contracts/FreelancerEscrow.sol": {
-      "lastModificationDate": 1777030276493,
-      "contentHash": "f3c4c0e1d473b173b2366223e4054a6b",
+      "lastModificationDate": 1777052858431,
+      "contentHash": "da29122b77e845847d88fe525bdcaf3f",
       "sourceName": "contracts/FreelancerEscrow.sol",
       "solcConfig": {
         "version": "0.8.28",
