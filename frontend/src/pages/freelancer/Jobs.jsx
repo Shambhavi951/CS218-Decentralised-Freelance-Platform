@@ -24,7 +24,7 @@ import StatusBadge from "../../components/StatusBadge";
 
 import { ABI } from "../../constants/abi";
 import { CONTRACT_ADDRESS, NOW, ZERO_CID } from "../../constants/config";
-import { computeCid, cidToBytes32 } from "../../utils/ipfs";
+import { computeCid, cidToBytes32, uploadFileToIPFS } from "../../utils/ipfs";
 import { fmtEth, timeLeft, isZeroCid } from "../../utils/helpers";
 
 const MIN_STAKE = ethers.parseEther("0.05");
@@ -41,9 +41,11 @@ const FreelancerJobs = ({ account, signer, provider, toast }) => {
   const [rateJob, setRateJob] = useState(null); // jobId | null
   const [clientRepModal, setClientRepModal] = useState(null); // client address | null
   const [workDesc, setWorkDesc] = useState("");
+  const [workFile, setWorkFile] = useState(null);
+  const [workCid, setWorkCid] = useState("");
   const [score, setScore] = useState(0);
   const [userStake, setUserStake] = useState(0n);
-  const [cidModal, setCidModal] = useState(null); // workCid | null
+  const [cidModal, setCidModal] = useState(null); // job object | null
 
   /* ── Load ─────────────────────────────────────────────────────────── */
   useEffect(() => {
@@ -97,12 +99,23 @@ const FreelancerJobs = ({ account, signer, provider, toast }) => {
           }
 
           let realCID = null;
+          let workSubmission = null;
           if (j.workCid && j.workCid !== ZERO_CID) {
             try {
               const res = await fetch(`http://localhost:3000/get-cid/${j.workCid}`);
               if (res.ok) {
                 const data = await res.json();
                 realCID = data.cid;
+              }
+              
+              // Also fetch work submission details
+              try {
+                const subRes = await fetch(`http://localhost:3000/get-work-submission/${i}`);
+                if (subRes.ok) {
+                  workSubmission = await subRes.json();
+                }
+              } catch (subError) {
+                console.warn("Could not fetch work submission:", subError);
               }
             } catch (e) {
               console.warn("CID not found", e);
@@ -117,7 +130,8 @@ const FreelancerJobs = ({ account, signer, provider, toast }) => {
             deadline: Number(j.deadline),
             submittedAt: Number(j.submittedAt),
             workCid: j.workCid,
-            realCID: realCID
+            realCID: realCID,
+            workSubmission: workSubmission
           });
         }
         setJobs(list);
@@ -169,15 +183,24 @@ const FreelancerJobs = ({ account, signer, provider, toast }) => {
 
   /* ── Submit work ──────────────────────────────────────────────────── */
   const handleSubmit = async () => {
-    if (!workDesc.trim()) {
-      toast("Describe your work first", "error");
+    if (!workFile && !workCid.trim()) {
+      toast("Upload a file or paste a CID", "error");
       return;
     }
 
     setBusy(true);
     try {
-      // Compute CID from work description
-      const originalCid = await computeCid(workDesc);
+      let originalCid;
+      
+      if (workCid.trim()) {
+        // Use manually provided CID
+        originalCid = workCid.trim().replace("ipfs://", "");
+      } else if (workFile) {
+        // Upload file to IPFS via Pinata
+        toast("Uploading file to IPFS…");
+        originalCid = await uploadFileToIPFS(workFile);
+      }
+      
       const cidHash = cidToBytes32(originalCid);
 
       const activeSigner = signer ?? provider?.getSigner();
@@ -203,16 +226,17 @@ const FreelancerJobs = ({ account, signer, provider, toast }) => {
             freelancer: account,
             cidHash: cidHash,
             originalCid: originalCid,
-            workDescription: workDesc.trim()
+            workDescription: workDesc.trim(),
+            fileName: workFile ? workFile.name : null
           })
         });
 
         const backendData = await backendResponse.json();
 
         if (!backendResponse.ok) {
-          //   console.warn("Backend storage failed:", backendData.error);
-          throw new Error(backendData.error || "Backend failed");
-          // Don't fail the whole operation, just log the warning
+        
+        throw new Error(backendData.error || "Backend failed");
+        
         } else {
           console.log("Work stored in backend:", backendData);
         }
@@ -225,6 +249,8 @@ const FreelancerJobs = ({ account, signer, provider, toast }) => {
       await loadChain();
       setSubmitJob(null);
       setWorkDesc("");
+      setWorkFile(null);
+      setWorkCid("");
 
     } catch (e) {
       console.error("Work submission error:", e);
@@ -479,28 +505,28 @@ const FreelancerJobs = ({ account, signer, provider, toast }) => {
                       </div>
                     )}
 
-                    {/* Work status */}
-                    {hasWork && (
-                      <div className={`fjob-card__work fjob-card__work--${job.status === 2 ? "locked" : "submitted"}`}>
-                        <span>
-                          {job.status === 2 ? "🔒 Work locked on-chain" : "✓ Work submitted"}
-                        </span>
-                        <span className="fjob-card__work-cid">
-                          <button
-                            className="fjob-card__cid-btn"
-                            onClick={() => setCidModal(job.workCid)}
-                          >
-                            {job.workCid.slice(0, 36)}…
-                          </button>
-                        </span>
-                        {job.status === 2 && (
-                          <div className="fjob-card__backend-note">
-                            📄 Work description stored securely in backend
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
+                  {/* Work status */}
+                  {hasWork && (
+                    <div className={`fjob-card__work fjob-card__work--${job.status === 2 ? "locked" : "submitted"}`}>
+                      <span>
+                        {job.status === 2 ? "🔒 Work locked on-chain" : "✓ Work submitted"}
+                      </span>
+                      <span className="fjob-card__work-cid">
+                        <button 
+                          className="fjob-card__cid-btn"
+                          onClick={() => setCidModal(job)}
+                        >
+                          View Work
+                        </button>
+                      </span>
+                      {job.status === 2 && (
+                        <div className="fjob-card__backend-note">
+                          📄 Work description stored securely in backend
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
 
                   {/* Actions */}
                   <div className="fjob-card__actions">
@@ -556,26 +582,69 @@ const FreelancerJobs = ({ account, signer, provider, toast }) => {
       {/* Submit work modal */}
       <Modal
         open={!!submitJob}
-        onClose={() => { setSubmitJob(null); setWorkDesc(""); }}
+        onClose={() => { setSubmitJob(null); setWorkDesc(""); setWorkFile(null); setWorkCid(""); }}
         title={`Submit Work · Job #${submitJob}`}
         accent="#f59e0b"
       >
         <Textarea
-          label="Work description / IPFS CID"
+          label="Work description (optional)"
           value={workDesc}
           onChange={setWorkDesc}
-          placeholder="Describe what you delivered, or paste your IPFS CID: ipfs://Qm…"
-          rows={4}
+          placeholder="Describe what you delivered (optional notes)"
+          rows={3}
         />
-        <InfoBox color="#38bdf8">
-          🔒 Your work will be hashed on-chain. Once the client confirms, the hash
-          is <strong>permanently locked</strong> as proof of delivery.
+        <div style={{ marginTop: '1rem', padding: '1rem', border: '2px solid #f59e0b', borderRadius: '4px', backgroundColor: 'rgba(245, 158, 11, 0.1)' }}>
+          <p style={{ margin: '0 0 1rem 0', fontWeight: 'bold', color: '#f59e0b' }}>
+            ✓ REQUIRED: Upload file OR paste CID
+          </p>
+          
+          <div style={{ marginBottom: '1rem' }}>
+            <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
+              Upload Work File
+            </label>
+            <input
+              type="file"
+              onChange={(e) => setWorkFile(e.target.files[0])}
+              style={{ width: '100%', padding: '0.5rem', border: '1px solid #ccc', borderRadius: '4px' }}
+            />
+            {workFile && (
+              <p style={{ marginTop: '0.5rem', fontSize: '0.9rem', color: '#10b981' }}>
+                ✓ Selected: {workFile.name}
+              </p>
+            )}
+          </div>
+
+          <div style={{ textAlign: 'center', margin: '1rem 0', fontSize: '0.9rem', fontWeight: 'bold', color: '#666' }}>
+            OR
+          </div>
+
+          <div>
+            <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>
+              Paste IPFS CID
+            </label>
+            <input
+              type="text"
+              placeholder="Qm... or ipfs://Qm..."
+              value={workCid}
+              onChange={(e) => setWorkCid(e.target.value)}
+              style={{ width: '100%', padding: '0.5rem', border: '1px solid #ccc', borderRadius: '4px', fontFamily: 'monospace', fontSize: '0.85rem' }}
+            />
+            {workCid && (
+              <p style={{ marginTop: '0.5rem', fontSize: '0.9rem', color: '#10b981' }}>
+                ✓ CID provided: {workCid.slice(0, 30)}...
+              </p>
+            )}
+          </div>
+        </div>
+        
+        <InfoBox color="#38bdf8" style={{ marginTop: '1rem' }}>
+          🔒 Work will be hashed on-chain. Once client confirms, the hash is <strong>permanently locked</strong> as proof of delivery.
         </InfoBox>
         <div className="modal__footer">
-          <Btn variant="ghost" onClick={() => { setSubmitJob(null); setWorkDesc(""); }}>
+          <Btn variant="ghost" onClick={() => { setSubmitJob(null); setWorkDesc(""); setWorkFile(null); setWorkCid(""); }}>
             Cancel
           </Btn>
-          <Btn onClick={handleSubmit} loading={busy} accent="#f59e0b">
+          <Btn onClick={handleSubmit} loading={busy} accent="#f59e0b" disabled={!workFile && !workCid.trim()}>
             Submit On-Chain
           </Btn>
         </div>
@@ -647,19 +716,76 @@ const FreelancerJobs = ({ account, signer, provider, toast }) => {
         </div>
       </Modal>
 
-      {/* CID Modal */}
+      {/* Work CID Modal - shows both on-chain hash and original IPFS CID */}
       <Modal
         open={!!cidModal}
         onClose={() => setCidModal(null)}
-        title="Work CID Hash"
+        title="Work Submission Details"
         accent="#38bdf8"
       >
-        <div style={{ wordBreak: 'break-all', fontFamily: 'var(--font-mono)', fontSize: '14px', background: 'var(--bg2)', padding: '12px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)' }}>
-          {cidModal}
-        </div>
-        <InfoBox color="#38bdf8" style={{ marginTop: '12px' }}>
-          This is the hashed CID of the work submitted to IPFS. The full content can be accessed using an IPFS gateway.
-        </InfoBox>
+        {cidModal && (
+          <div>
+            {/* On-chain hash (for verification) */}
+            <div style={{ marginBottom: '1.5rem' }}>
+              <h4 style={{ marginBottom: '0.5rem', fontSize: '0.9rem', fontWeight: 'bold', color: 'var(--text-secondary)' }}>
+                On-Chain Hash (Verification):
+              </h4>
+              <div style={{ wordBreak: 'break-all', fontFamily: 'var(--font-mono)', fontSize: '12px', background: 'var(--bg2)', padding: '12px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)' }}>
+                {cidModal.workCid}
+              </div>
+              <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginTop: '0.5rem' }}>
+                This hash is permanently stored on-chain as proof of work submission.
+              </p>
+            </div>
+
+            {/* Original IPFS CID (if available from backend) */}
+            {cidModal.workSubmission?.originalCid && (
+              <div style={{ marginBottom: '1.5rem' }}>
+                <h4 style={{ marginBottom: '0.5rem', fontSize: '0.9rem', fontWeight: 'bold', color: 'var(--text-secondary)' }}>
+                  IPFS Content Hash:
+                </h4>
+                <div style={{ wordBreak: 'break-all', fontFamily: 'var(--font-mono)', fontSize: '12px', background: 'var(--bg2)', padding: '12px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)' }}>
+                  {cidModal.workSubmission.originalCid}
+                </div>
+                <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginTop: '0.5rem' }}>
+                  ipfs://{cidModal.workSubmission.originalCid}
+                </p>
+                <a 
+                  href={`https://gateway.pinata.cloud/ipfs/${cidModal.workSubmission.originalCid}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{ display: 'inline-block', marginTop: '0.5rem', color: '#38bdf8', textDecoration: 'none', fontWeight: 'bold' }}
+                >
+                  → View on Pinata Gateway
+                </a>
+              </div>
+            )}
+
+            {/* Work description */}
+            {cidModal.workSubmission?.workDescription && (
+              <div style={{ marginBottom: '1.5rem' }}>
+                <h4 style={{ marginBottom: '0.5rem', fontSize: '0.9rem', fontWeight: 'bold', color: 'var(--text-secondary)' }}>
+                  Work Description:
+                </h4>
+                <p style={{ background: 'var(--bg2)', padding: '12px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                  {cidModal.workSubmission.workDescription}
+                </p>
+              </div>
+            )}
+
+            {/* File name */}
+            {cidModal.workSubmission?.fileName && (
+              <div>
+                <h4 style={{ marginBottom: '0.5rem', fontSize: '0.9rem', fontWeight: 'bold', color: 'var(--text-secondary)' }}>
+                  File Name:
+                </h4>
+                <p style={{ background: 'var(--bg2)', padding: '12px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)' }}>
+                  {cidModal.workSubmission.fileName}
+                </p>
+              </div>
+            )}
+          </div>
+        )}
       </Modal>
     </div>
   );
