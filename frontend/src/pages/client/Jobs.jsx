@@ -14,7 +14,7 @@ import { fmtEth, timeLeft, isZeroCid } from "../../utils/helpers";
 const ClientJobs = ({ account, signer, provider, toast, onRateNeeded }) => {
   const [jobs, setJobs] = useState([]);
   const [busy, setBusy] = useState(false);
-  const [cidModal, setCidModal] = useState(null); // workCid | null
+  const [cidModal, setCidModal] = useState(null); // job object | null
 
   /* ── Load ─────────────────────────────────────────────────────────── */
   useEffect(() => {
@@ -45,22 +45,26 @@ const ClientJobs = ({ account, signer, provider, toast, onRateNeeded }) => {
         // Check if job is rated (for completed jobs)
         let isRated = false;
         let workSubmission = null;
+        
+        // Fetch work submission for any job with work submitted
+        if (Number(j.status) >= 1 && !isZeroCid(j.workCid)) {
+          try {
+            const response = await fetch(`http://localhost:3000/get-work-submission/${i}`);
+            if (response.ok) {
+              workSubmission = await response.json();
+            }
+          } catch (backendError) {
+            console.warn("Could not fetch work submission from backend:", backendError);
+          }
+        }
+        
+        // Check if job is rated (for completed jobs)
         if (Number(j.status) === 2) { // Done status
           try {
             const [clientTokenId] = await c.getJobTokens(i);
             if (Number(clientTokenId) > 0) {
               const token = await c.tokens(Number(clientTokenId));
               isRated = token.applied;
-            }
-
-            // Try to get work submission from backend
-            try {
-              const response = await fetch(`http://localhost:3000/get-work-submission/${i}`);
-              if (response.ok) {
-                workSubmission = await response.json();
-              }
-            } catch (backendError) {
-              console.warn("Could not fetch work submission from backend:", backendError);
             }
           } catch (e) {
             // Token might not exist yet, ignore
@@ -182,9 +186,9 @@ const ClientJobs = ({ account, signer, provider, toast, onRateNeeded }) => {
                       <div className="cjob-card__work-cid">
                         <button 
                           className="cjob-card__cid-btn"
-                          onClick={() => setCidModal(job.workCid)}
+                          onClick={() => setCidModal(job)}
                         >
-                          {job.workCid.slice(0, 36)}…
+                          View Work
                         </button>
                       </div>
                     </div>
@@ -197,9 +201,9 @@ const ClientJobs = ({ account, signer, provider, toast, onRateNeeded }) => {
                       <div className="cjob-card__work-cid">
                         <button 
                           className="cjob-card__cid-btn"
-                          onClick={() => setCidModal(job.workCid)}
+                          onClick={() => setCidModal(job)}
                         >
-                          {job.workCid.slice(0, 36)}…
+                          View Work
                         </button>
                       </div>
                       {job.workSubmission && (
@@ -252,19 +256,76 @@ const ClientJobs = ({ account, signer, provider, toast, onRateNeeded }) => {
         </div>
       )}
 
-      {/* CID Modal */}
+      {/* Work CID Modal - shows both on-chain hash and original IPFS CID */}
       <Modal
         open={!!cidModal}
         onClose={() => setCidModal(null)}
-        title="Work CID Hash"
+        title="Work Submission Details"
         accent="#38bdf8"
       >
-        <div style={{ wordBreak: 'break-all', fontFamily: 'var(--font-mono)', fontSize: '14px', background: 'var(--bg2)', padding: '12px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)' }}>
-          {cidModal}
-        </div>
-        <InfoBox color="#38bdf8" style={{ marginTop: '12px' }}>
-          This is the hashed CID of the work submitted to IPFS. The full content can be accessed using an IPFS gateway.
-        </InfoBox>
+        {cidModal && (
+          <div>
+            {/* On-chain hash (for verification) */}
+            <div style={{ marginBottom: '1.5rem' }}>
+              <h4 style={{ marginBottom: '0.5rem', fontSize: '0.9rem', fontWeight: 'bold', color: 'var(--text-secondary)' }}>
+                On-Chain Hash (Verification):
+              </h4>
+              <div style={{ wordBreak: 'break-all', fontFamily: 'var(--font-mono)', fontSize: '12px', background: 'var(--bg2)', padding: '12px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)' }}>
+                {cidModal.workCid}
+              </div>
+              <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginTop: '0.5rem' }}>
+                This hash is permanently stored on-chain as proof of work submission.
+              </p>
+            </div>
+
+            {/* Original IPFS CID (if available from backend) */}
+            {cidModal.workSubmission?.originalCid && (
+              <div style={{ marginBottom: '1.5rem' }}>
+                <h4 style={{ marginBottom: '0.5rem', fontSize: '0.9rem', fontWeight: 'bold', color: 'var(--text-secondary)' }}>
+                  IPFS Content Hash:
+                </h4>
+                <div style={{ wordBreak: 'break-all', fontFamily: 'var(--font-mono)', fontSize: '12px', background: 'var(--bg2)', padding: '12px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)' }}>
+                  {cidModal.workSubmission.originalCid}
+                </div>
+                <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginTop: '0.5rem' }}>
+                  ipfs://{cidModal.workSubmission.originalCid}
+                </p>
+                <a 
+                  href={`https://gateway.pinata.cloud/ipfs/${cidModal.workSubmission.originalCid}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{ display: 'inline-block', marginTop: '0.5rem', color: '#38bdf8', textDecoration: 'none', fontWeight: 'bold' }}
+                >
+                  → View on Pinata Gateway
+                </a>
+              </div>
+            )}
+
+            {/* Work description */}
+            {cidModal.workSubmission?.workDescription && (
+              <div style={{ marginBottom: '1.5rem' }}>
+                <h4 style={{ marginBottom: '0.5rem', fontSize: '0.9rem', fontWeight: 'bold', color: 'var(--text-secondary)' }}>
+                  Work Description:
+                </h4>
+                <p style={{ background: 'var(--bg2)', padding: '12px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                  {cidModal.workSubmission.workDescription}
+                </p>
+              </div>
+            )}
+
+            {/* File name */}
+            {cidModal.workSubmission?.fileName && (
+              <div>
+                <h4 style={{ marginBottom: '0.5rem', fontSize: '0.9rem', fontWeight: 'bold', color: 'var(--text-secondary)' }}>
+                  File Name:
+                </h4>
+                <p style={{ background: 'var(--bg2)', padding: '12px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)' }}>
+                  {cidModal.workSubmission.fileName}
+                </p>
+              </div>
+            )}
+          </div>
+        )}
       </Modal>
     </div>
   );
