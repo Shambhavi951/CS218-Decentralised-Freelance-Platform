@@ -12,11 +12,11 @@ import { loadMeta } from "../../utils/ipfs";
 import { fmtEth } from "../../utils/helpers";
 
 const Browse = ({ account, signer, provider, toast, onHired }) => {
-  const [services,    setServices]   = useState([]);
-  const [hireTarget,  setHireTarget] = useState(null);
+  const [services, setServices] = useState([]);
+  const [hireTarget, setHireTarget] = useState(null);
   const [freelancerReps, setFreelancerReps] = useState({}); // freelancer address -> {avg, total}
   const [profileModal, setProfileModal] = useState(null); // svc object | null
-  const [busy,        setBusy]       = useState(false);
+  const [busy, setBusy] = useState(false);
 
   /* ── Load ─────────────────────────────────────────────────────────── */
   useEffect(() => {
@@ -26,14 +26,14 @@ const Browse = ({ account, signer, provider, toast, onHired }) => {
   const loadChain = async () => {
     if (!signer && !provider) return;
     try {
-      const c   = new ethers.Contract(CONTRACT_ADDRESS, ABI, provider ?? signer);
+      const c = new ethers.Contract(CONTRACT_ADDRESS, ABI, provider ?? signer);
       const cnt = Number(await c.serviceCount());
       const list = [];
       const reps = {};
       for (let i = 1; i <= cnt; i++) {
         const s = await c.getService(i);
         const m = loadMeta(s.metadataCid) ?? {};
-        
+
         // Fetch freelancer reputation if not already cached
         if (!reps[s.freelancer]) {
           try {
@@ -44,15 +44,16 @@ const Browse = ({ account, signer, provider, toast, onHired }) => {
             reps[s.freelancer] = { avg: 0, weight: 0, jobs: 0 };
           }
         }
-        
+
         list.push({
-          id:          i,
-          freelancer:  s.freelancer,
-          status:      Number(s.status),
-          priceWei:    s.priceWei.toString(),
+          id: i,
+          freelancer: s.freelancer,
+          status: Number(s.status),
+          priceWei: s.priceWei.toString(),
           metadataCid: s.metadataCid,
-          title:       m.title       ?? "Untitled",
+          title: m.title ?? "Untitled",
           description: m.description ?? "",
+          deadline: m.deadline ?? 7,
         });
       }
       setServices(list);
@@ -78,8 +79,9 @@ const Browse = ({ account, signer, provider, toast, onHired }) => {
         return;
       }
 
-      const c  = new ethers.Contract(CONTRACT_ADDRESS, ABI, activeSigner);
-      const tx = await c.hireFreelancer(hireTarget.id, {
+      const c = new ethers.Contract(CONTRACT_ADDRESS, ABI, activeSigner);
+      const deadlineTimestamp = Math.floor(Date.now() / 1000) + (hireTarget.deadline * 86400);
+      const tx = await c.hireFreelancer(hireTarget.id, deadlineTimestamp, {
         value: hireTarget.priceWei,
       });
       toast("Payment locked in escrow…");
@@ -117,20 +119,23 @@ const Browse = ({ account, signer, provider, toast, onHired }) => {
               </div>
               <h3 className="browse-card__title">{svc.title}</h3>
               <p className="browse-card__desc">{svc.description}</p>
-              
+
               {/* Freelancer Profile */}
               <div className="browse-card__freelancer-rep">
-                <button 
+                <button
                   className="browse-card__freelancer-rep-btn"
                   onClick={() => setProfileModal(svc)}
                 >
                   View Profile
                 </button>
               </div>
-              
-              <div className="browse-card__footer">
+
+              <div className="browse-card__footer" style={{ display: "flex", alignItems: "center" }}>
                 <span className="browse-card__price">
                   {fmtEth(svc.priceWei)}
+                </span>
+                <span style={{ fontSize: "13px", color: "var(--text2)", background: "var(--bg2)", padding: "4px 8px", borderRadius: "12px", marginLeft: "auto", marginRight: "12px" }}>
+                  ⏱ {svc.deadline} {svc.deadline === 1 ? 'day' : 'days'}
                 </span>
                 <Btn
                   sm
@@ -195,7 +200,7 @@ const Browse = ({ account, signer, provider, toast, onHired }) => {
         accent="#10b981"
       >
         {profileModal && (
-          <FreelancerProfile 
+          <FreelancerProfile
             freelancerId={profileModal.freelancer}
             context="browse"
             reputation={freelancerReps[profileModal.freelancer]}

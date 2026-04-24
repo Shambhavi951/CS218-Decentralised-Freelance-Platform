@@ -8,7 +8,7 @@ pragma solidity 0.8.28;
 
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
-/**
+/*
  * @title  FreelanceEscrow  (Slither-audited revision)
  * @notice Decentralised escrow for freelance services with commit-reveal
  *         reputation, staking, and weighted scores.
@@ -43,7 +43,7 @@ import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
  *    transfers that avoids gas-limit issues with transfer/send.  Retained as-is.
  *
  *  [NOTE] assembly
- *    All assembly usage is inside OpenZeppelin StorageSlot library (library code).
+ *    All assembly usage is inside @openzeppelin/StorageSlot.sol (library code).
  *    Not our code; no change required.
  *
  *  [NOTE] naming-convention
@@ -134,6 +134,8 @@ contract FreelanceEscrow is ReentrancyGuard {
     error InvalidReveal();
     error CommitNotFound();
     error ReviewWindowNotClosed();
+    error DeadlineTooSoon();
+    error DeadlineTooFar();
 
     // ─────────────────────────────────────────────
     //  ENUMS
@@ -170,6 +172,7 @@ contract FreelanceEscrow is ReentrancyGuard {
         uint64          deadline;    //  8 bytes  │ slot 2
         uint64          submittedAt; //  8 bytes  ┘
         bytes32         workCid;     // 32 bytes ── slot 3
+        bytes32         jobDescription;     // 32 bytes ── slot 4 
     }
 
     /**
@@ -416,14 +419,16 @@ contract FreelanceEscrow is ReentrancyGuard {
     // ─────────────────────────────────────────────
     //  3. HIRE FREELANCER
     // ─────────────────────────────────────────────
-
-    function hireFreelancer(uint32 serviceId) external payable nonReentrant {
+    
+    function hireFreelancer(uint32 serviceId, uint64 deadline, bytes32 jobDescription) external payable nonReentrant {
         Service storage s = services[serviceId];
 
         if (s.freelancer == address(0))       revert InvalidService();
         if (s.status != ServiceStatus.Listed) revert ServiceNotAvailable();
         if (msg.value != s.priceWei)          revert IncorrectETH();
         if (msg.sender == s.freelancer)       revert CannotHireYourself();
+        if (deadline < block.timestamp + 1 days)  revert DeadlineTooSoon();   // ← new guard
+        if (deadline > block.timestamp + 365 days) revert DeadlineTooFar();   // ← optional cap
 
         uint32 id = ++jobCount;
         jobs[id] = Job({
@@ -431,9 +436,10 @@ contract FreelanceEscrow is ReentrancyGuard {
             serviceId:   serviceId,
             status:      JobStatus.Active,
             amount:      uint128(msg.value),
-            deadline:    uint64(block.timestamp + 7 days),
+            deadline:    deadline,             // ← use client input
             submittedAt: 0,
-            workCid:     bytes32(0)
+            workCid:     bytes32(0),
+            jobDescription: jobDescription
         });
 
         s.status = ServiceStatus.Hired;

@@ -43,7 +43,7 @@ const Services = ({ account, signer, provider, toast }) => {
   const [services, setServices] = useState([]);
   const [busy,     setBusy]     = useState(false);
   const [open,     setOpen]     = useState(false);
-  const [form,     setForm]     = useState({ title: "", desc: "", price: "" });
+  const [form,     setForm]     = useState({ title: "", desc: "", price: "", deadline: "" });
 
   /* ── Load ─────────────────────────────────────────────────────────── */
   useEffect(() => {
@@ -85,6 +85,7 @@ const Services = ({ account, signer, provider, toast }) => {
           metadataCid: s.metadataCid,
           title:       m.title       ?? "Untitled",
           description: m.description ?? "",
+          deadline:    m.deadline    ?? 7,
           mine: true,
         });
       }
@@ -96,15 +97,19 @@ const Services = ({ account, signer, provider, toast }) => {
 
   /* ── Offer ────────────────────────────────────────────────────────── */
   const handleOffer = async () => {
-    const { title, desc, price } = form;
+    const { title, desc, price, deadline } = form;
     if (!title || !price || isNaN(price) || Number(price) <= 0) {
       toast("Please fill all fields with valid values", "error");
       return;
     }
+    if (!deadline || isNaN(deadline) || Number(deadline) < 1) {
+      toast("Deadline must be at least 1 day", "error");
+      return;
+    }
     setBusy(true);
     try {
-      const cid = await computeCid(title + desc);
-      saveMeta(cid, { title, description: desc });
+      const cid = await computeCid(title + desc + deadline);
+      saveMeta(cid, { title, description: desc, deadline: Number(deadline) });
 
       const activeSigner = signer ?? provider?.getSigner();
       if (!activeSigner) {
@@ -120,7 +125,7 @@ const Services = ({ account, signer, provider, toast }) => {
       toast("Service listed on-chain!", "success");
       await loadChain();
       setOpen(false);
-      setForm({ title: "", desc: "", price: "" });
+      setForm({ title: "", desc: "", price: "", deadline: "" });
     } catch (e) {
       toast(e.reason ?? e.message ?? "Transaction failed", "error");
     }
@@ -156,12 +161,12 @@ const Services = ({ account, signer, provider, toast }) => {
               </div>
               <h3 className="service-card__title">{svc.title}</h3>
               <p className="service-card__desc">{svc.description}</p>
-              <div className="service-card__footer">
+              <div className="service-card__footer" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <span className="service-card__price">
                   {parseFloat(ethers.formatEther(svc.priceWei)).toFixed(3)} ETH
                 </span>
-                <span className="service-card__cid">
-                  {svc.metadataCid?.slice(0, 14)}…
+                <span style={{ fontSize: "13px", color: "var(--text2)", background: "var(--bg2)", padding: "4px 8px", borderRadius: "12px" }}>
+                  ⏱ {svc.deadline} {svc.deadline === 1 ? 'day' : 'days'}
                 </span>
               </div>
             </Card>
@@ -195,6 +200,13 @@ const Services = ({ account, signer, provider, toast }) => {
           value={form.price}
           onChange={(v) => setForm((f) => ({ ...f, price: v }))}
           placeholder="e.g. 1.5"
+        />
+        <Input
+          label="Deadline (in days)"
+          type="number"
+          value={form.deadline}
+          onChange={(v) => setForm((f) => ({ ...f, deadline: v }))}
+          placeholder="Enter number of days"
         />
         <InfoBox color="#4ade80">
           💡 Title + description are SHA-256 hashed → 32-byte CID stored on-chain

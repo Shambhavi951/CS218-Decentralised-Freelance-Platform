@@ -683,8 +683,13 @@ export const ABI = [
     "inputs": [
       {
         "internalType": "uint32",
-        "name": "_serviceId",
+        "name": "serviceId",
         "type": "uint32"
+      },
+      {
+        "internalType": "uint64",
+        "name": "deadline",
+        "type": "uint64"
       }
     ],
     "name": "hireFreelancer",
