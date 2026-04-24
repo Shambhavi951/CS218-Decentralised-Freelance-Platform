@@ -176,3 +176,6 @@ export const cidToBytes32 = (cid) =>
  */
 export const getIPFSUrl = (cid) =>
   `https://gateway.pinata.cloud/ipfs/${cid}`;
+
+
+

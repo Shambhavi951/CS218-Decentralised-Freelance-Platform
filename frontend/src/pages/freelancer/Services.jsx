@@ -37,7 +37,7 @@ import StatusBadge from "../../components/StatusBadge";
 
 import { ABI } from "../../constants/abi";
 import { CONTRACT_ADDRESS } from "../../constants/config";
-import { computeCid, saveMeta, loadMeta ,uploadJsonToIPFS,getIPFSUrl  } from "../../utils/ipfs";
+import { computeCid, saveMeta, loadMeta } from "../../utils/ipfs";
 
 const Services = ({ account, signer, provider, toast }) => {
   const [services, setServices] = useState([]);
@@ -76,8 +76,7 @@ const Services = ({ account, signer, provider, toast }) => {
       for (let i = 1; i <= cnt; i++) {
         const s = await c.getService(i);
         if (s.freelancer.toLowerCase() !== account.toLowerCase()) continue;
-       const res = await fetch(getIPFSUrl(s.metadataCid));
-       const m = await res.json();
+        const m = loadMeta(s.metadataCid) ?? {};
         list.push({
           id: i,
           freelancer:  s.freelancer,
@@ -104,10 +103,8 @@ const Services = ({ account, signer, provider, toast }) => {
     }
     setBusy(true);
     try {
-      const cid = await uploadJsonToIPFS({
-        title,
-        description: desc
-         });
+      const cid = await computeCid(title + desc);
+      saveMeta(cid, { title, description: desc });
 
       const activeSigner = signer ?? provider?.getSigner();
       if (!activeSigner) {
