@@ -4,6 +4,7 @@ import "../../styles/pages/client/Browse.css";
 
 import { Btn, Card, InfoBox, Chip, Stars } from "../../components/ui";
 import Modal from "../../components/Modal";
+import FreelancerProfile from "../../components/FreelancerProfile";
 
 import { ABI } from "../../constants/abi";
 import { CONTRACT_ADDRESS } from "../../constants/config";
@@ -14,7 +15,7 @@ const Browse = ({ account, signer, provider, toast, onHired }) => {
   const [services,    setServices]   = useState([]);
   const [hireTarget,  setHireTarget] = useState(null);
   const [freelancerReps, setFreelancerReps] = useState({}); // freelancer address -> {avg, total}
-  const [freelancerRepModal, setFreelancerRepModal] = useState(null); // freelancer address | null
+  const [profileModal, setProfileModal] = useState(null); // svc object | null
   const [busy,        setBusy]       = useState(false);
 
   /* ── Load ─────────────────────────────────────────────────────────── */
@@ -117,13 +118,13 @@ const Browse = ({ account, signer, provider, toast, onHired }) => {
               <h3 className="browse-card__title">{svc.title}</h3>
               <p className="browse-card__desc">{svc.description}</p>
               
-              {/* Freelancer Reputation */}
+              {/* Freelancer Profile */}
               <div className="browse-card__freelancer-rep">
                 <button 
                   className="browse-card__freelancer-rep-btn"
-                  onClick={() => setFreelancerRepModal(svc.freelancer)}
+                  onClick={() => setProfileModal(svc)}
                 >
-                  Freelancer Reputation
+                  View Profile
                 </button>
               </div>
               
@@ -186,39 +187,25 @@ const Browse = ({ account, signer, provider, toast, onHired }) => {
         )}
       </Modal>
 
-      {/* Freelancer Reputation Modal */}
+      {/* Freelancer Profile Modal */}
       <Modal
-        open={!!freelancerRepModal}
-        onClose={() => setFreelancerRepModal(null)}
-        title="Freelancer Reputation"
+        open={!!profileModal}
+        onClose={() => setProfileModal(null)}
+        title="Freelancer Profile"
         accent="#10b981"
       >
-        {freelancerRepModal && freelancerReps[freelancerRepModal] && (
-          <div className="freelancer-rep-modal">
-            <div className="freelancer-rep-modal__address">
-              <Chip addr={freelancerRepModal} />
-            </div>
-            <div className="freelancer-rep-modal__score">
-              <div className="freelancer-rep-modal__score-value">
-                {(freelancerReps[freelancerRepModal].avg / 100).toFixed(1)}/5
-              </div>
-              <div className="freelancer-rep-modal__stars">
-                <Stars value={Math.round(freelancerReps[freelancerRepModal].avg / 100)} readonly />
-              </div>
-            </div>
-            <div className="freelancer-rep-modal__stats">
-              <div className="freelancer-rep-modal__stat">
-                <span className="freelancer-rep-modal__stat-label">Total Ratings:</span>
-                <span className="freelancer-rep-modal__stat-value">{freelancerReps[freelancerRepModal].total}</span>
-              </div>
-            </div>
-          </div>
+        {profileModal && (
+          <FreelancerProfile 
+            freelancerId={profileModal.freelancer}
+            context="browse"
+            reputation={freelancerReps[profileModal.freelancer]}
+            onHire={() => {
+              setHireTarget(profileModal);
+              setProfileModal(null);
+            }}
+            onClose={() => setProfileModal(null)}
+          />
         )}
-        <div className="modal__footer">
-          <Btn onClick={() => setFreelancerRepModal(null)}>
-            Close
-          </Btn>
-        </div>
       </Modal>
     </div>
   );
