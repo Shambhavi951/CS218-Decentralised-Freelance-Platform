@@ -9,7 +9,6 @@ import { CONTRACT_ADDRESS, MIN_STAKE } from "../../constants/config";
 import { loadMeta } from "../../utils/ipfs";
 import { fmtEth } from "../../utils/helpers";
 import {
-  getFeedbackToken,
   submitFeedback,
   finalizeReview,
   depositStake,
@@ -19,7 +18,7 @@ import { ABI } from "../../constants/abi";
 const MIN_STAKE_WEI = ethers.parseEther("0.05");
 
 const Rate = ({ account, signer, provider, toast }) => {
-  const [tab, setTab] = useState('pending'); // 'pending' or 'finalize'
+  const [mode, setMode] = useState('submit'); // Default to 'submit'
   const [pendingJobs, setPendingJobs] = useState([]);
   const [expiredJobs, setExpiredJobs] = useState([]);
   const [rateJob, setRateJob] = useState(null);
@@ -31,7 +30,7 @@ const Rate = ({ account, signer, provider, toast }) => {
   /* ── Load ─────────────────────────────────────────────────────────── */
   useEffect(() => {
     loadChain();
-  }, [account, tab]); // eslint-disable-line
+  }, [account, mode]); // eslint-disable-line
 
   const loadChain = async () => {
     if (!account || !provider) return;
@@ -55,8 +54,8 @@ const Rate = ({ account, signer, provider, toast }) => {
 
       // Get jobs where this account is the client
       const jobCnt = Number(await contract.jobCount());
-      const pendingList = [];
-      const expiredList = [];
+      const submitList = [];
+      const finalizeList = [];
 
       for (let i = 1; i <= jobCnt; i++) {
         const job = await contract.getJob(i);
@@ -73,32 +72,33 @@ const Rate = ({ account, signer, provider, toast }) => {
         // Client rates freelancer (uses clientTokenId)
         if (Number(clientTokenId) === 0) continue;
 
-        const token = await getFeedbackToken(Number(clientTokenId), provider);
+        const token = await contract.tokens(Number(clientTokenId));
         const svc = svcMap[Number(job.serviceId)] ?? {};
 
         const jobData = {
           jobId: i,
-          tokenId: token.tokenId,
-          token,
+          tokenId: Number(clientTokenId),
           amount: job.amount.toString(),
           title: svc.title ?? "Untitled",
           freelancer: svc.freelancer ?? "",
-          reviewee: job.freelancer || svc.freelancer // Person being rated
+          reviewee: job.freelancer || svc.freelancer,
+          token: token,
+          expiry: Number(token.expiry)
         };
 
-        if (token.used) {
-          // Already submitted - check if it needs finalization
-          if (token.isExpired && !token.applied) {
-            expiredList.push(jobData);
-          }
-        } else {
+        // Separate into submit vs finalize
+        if (!token.used) {
           // Not yet submitted
-          pendingList.push(jobData);
+          submitList.push(jobData);
+        } else if (!token.applied) {
+          // Submitted but not yet applied (waiting for counterparty or expiry)
+          finalizeList.push(jobData);
         }
+        // If applied, don't show it
       }
 
-      setPendingJobs(pendingList);
-      setExpiredJobs(expiredList);
+      setPendingJobs(submitList);
+      setExpiredJobs(finalizeList);
     } catch (e) {
       console.error("loadChain error:", e);
       toast("Failed to load jobs: " + e.message, "error");
@@ -128,6 +128,11 @@ const Rate = ({ account, signer, provider, toast }) => {
 
   /* ── Submit Feedback ──────────────────────────────────────────────── */
   const handleSubmitFeedback = async () => {
+    if (!rateJob) {
+      toast("No job selected for rating", "error");
+      return;
+    }
+
     if (!score) {
       toast("Select a star rating", "error");
       return;
@@ -181,6 +186,9 @@ const Rate = ({ account, signer, provider, toast }) => {
     setBusy(false);
   };
 
+// Determine which list to display based on the active mode
+const currentJobs = mode === 'commit' ? pendingJobs : expiredJobs;
+
   /* ── Render ───────────────────────────────────────────────────────── */
   return (
     <div className="page-section">
@@ -188,8 +196,8 @@ const Rate = ({ account, signer, provider, toast }) => {
 
       <Tabs
         tabs={[
-          { label: 'Commit Rating', value: 'commit' },
-          { label: 'Reveal Rating', value: 'reveal' },
+          { label: 'Submit Rating', value: 'submit' },
+          { label: 'Finalize Rating', value: 'finalize' },
         ]}
         active={mode}
         onChange={setMode}
@@ -198,7 +206,7 @@ const Rate = ({ account, signer, provider, toast }) => {
       {userStake < MIN_STAKE && (
         <Card>
           <InfoBox type="warning">
-            You need at least 0.05 ETH stake to commit ratings.
+            You need at least 0.05 ETH stake to submit ratings.
             <Btn onClick={handleDepositStake} loading={busy} style={{ marginLeft: '10px' }}>
               Deposit Stake
             </Btn>
@@ -209,16 +217,16 @@ const Rate = ({ account, signer, provider, toast }) => {
       {currentJobs.length === 0 ? (
         <Card>
           <div className="empty-state">
-            <p>{mode === 'commit' ? 'No jobs to commit rating.' : 'No ratings to reveal.'} ✓</p>
+            <p>{mode === 'submit' ? 'No jobs to rate yet.' : 'No pending ratings to finalize.'} ✓</p>
           </div>
         </Card>
       ) : (
         <div className="rate-list">
           {currentJobs.map((job) => (
-            <Card key={job.id} className="rate-card">
+            <Card key={job.jobId} className="rate-card">
               <div className="rate-card__info">
                 <div className="rate-card__meta">
-                  <span className="rate-card__id">Job #{job.id}</span>
+                  <span className="rate-card__id">Job #{job.jobId}</span>
                   <span className="rate-card__title">{job.title}</span>
                 </div>
                 <p className="rate-card__sub">
@@ -226,13 +234,13 @@ const Rate = ({ account, signer, provider, toast }) => {
                   &nbsp;·&nbsp; Freelancer <Chip addr={job.freelancer} />
                 </p>
               </div>
-              {mode === 'commit' ? (
-                <Btn accent="#38bdf8" onClick={() => setRateJob(job.id)}>
-                  Commit Rating ★
+              {mode === 'submit' ? (
+                <Btn accent="#38bdf8" onClick={() => setRateJob(job)}>
+                  Submit Rating ★
                 </Btn>
               ) : (
-                <Btn accent="#10b981" onClick={() => handleReveal(job.id)} loading={busy}>
-                  Reveal Rating
+                <Btn accent="#10b981" onClick={() => handleFinalizeReview(job.jobId)} loading={busy}>
+                  Finalize Rating
                 </Btn>
               )}
             </Card>
@@ -240,29 +248,29 @@ const Rate = ({ account, signer, provider, toast }) => {
         </div>
       )}
 
-      {/* Commit modal */}
-      {mode === 'commit' && (
+      {/* Submit rating modal */}
+      {mode === 'submit' && (
         <Modal
           open={!!rateJob}
-          onClose={() => { setRateJob(null); setStars(0); }}
-          title={`Commit Rating · Job #${rateJob}`}
+          onClose={() => { setRateJob(null); setScore(0); }}
+          title={`Submit Rating · Job #${rateJob?.jobId ?? ''}`}
           accent="#38bdf8"
         >
           <div className="rate-modal__stars-wrap">
             <p className="rate-modal__prompt">
               How was the quality of work delivered? (1-5 stars)
             </p>
-            <Stars value={stars} onChange={setStars} />
+            <Stars value={score} onChange={setScore} />
             <p className="rate-modal__note">
-              Your rating will be committed anonymously. You can reveal it later.
+              Your rating will be submitted to the blockchain and applied after 7 days or when the freelancer also rates you.
             </p>
           </div>
           <div className="modal__footer">
-            <Btn variant="ghost" onClick={() => { setRateJob(null); setStars(0); }}>
+            <Btn variant="ghost" onClick={() => { setRateJob(null); setScore(0); }}>
               Cancel
             </Btn>
-            <Btn onClick={handleCommit} loading={busy} accent="#38bdf8">
-              Commit Rating
+            <Btn onClick={handleSubmitFeedback} loading={busy} accent="#38bdf8">
+              Submit Rating
             </Btn>
           </div>
         </Modal>

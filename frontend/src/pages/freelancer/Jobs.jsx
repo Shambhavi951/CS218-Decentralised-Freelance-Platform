@@ -31,7 +31,7 @@ const MIN_STAKE = ethers.parseEther("0.05");
 
 const FreelancerJobs = ({ account, signer, provider, toast }) => {
   const [mode, setMode] = useState('jobs'); // 'jobs' or 'rate'
-  const [rateMode, setRateMode] = useState('commit'); // 'commit' or 'reveal' when mode='rate'
+  const [rateMode, setRateMode] = useState('submit'); // 'submit' or 'finalize' when mode='rate'
   const [jobs, setJobs] = useState([]);
   const [rateJobs, setRateJobs] = useState([]);
   const [revealJobs, setRevealJobs] = useState([]);
@@ -41,7 +41,7 @@ const FreelancerJobs = ({ account, signer, provider, toast }) => {
   const [rateJob, setRateJob] = useState(null); // jobId | null
   const [clientRepModal, setClientRepModal] = useState(null); // client address | null
   const [workDesc, setWorkDesc] = useState("");
-  const [stars, setStars] = useState(0);
+  const [score, setScore] = useState(0);
   const [userStake, setUserStake] = useState(0n);
 
   /* ── Load ─────────────────────────────────────────────────────────── */
@@ -81,11 +81,11 @@ const FreelancerJobs = ({ account, signer, provider, toast }) => {
           // Fetch client reputation if not already cached
           if (!reps[j.client]) {
             try {
-              const [avg, total] = await c.getClientReputation(j.client);
-              reps[j.client] = { avg: Number(avg), total: Number(total) };
+              const [avgScoreScaled, totalWeight, totalJobs] = await c.getClientReputation(j.client);
+              reps[j.client] = { avg: Number(avgScoreScaled), weight: Number(totalWeight), jobs: Number(totalJobs) };
             } catch (e) {
               console.warn("Failed to fetch client reputation for", j.client, e);
-              reps[j.client] = { avg: 0, total: 0 };
+              reps[j.client] = { avg: 0, weight: 0, jobs: 0 };
             }
           }
           
@@ -94,8 +94,6 @@ const FreelancerJobs = ({ account, signer, provider, toast }) => {
             client: j.client,
             serviceId: Number(j.serviceId),
             status: Number(j.status),
-            clientRated: j.clientRated,
-            freelancerRated: j.freelancerRated,
             amount: j.amount.toString(),
             deadline: Number(j.deadline),
             submittedAt: Number(j.submittedAt),
@@ -106,47 +104,42 @@ const FreelancerJobs = ({ account, signer, provider, toast }) => {
         setClientReps(reps);
       } else if (mode === 'rate') {
         const cnt = Number(await c.jobCount());
-        if (rateMode === 'commit') {
-          const list = [];
-          for (let i = 1; i <= cnt; i++) {
-            const j = await c.getJob(i);
-            const sv = await c.getService(Number(j.serviceId));
-            if (
-              sv.freelancer.toLowerCase() !== account.toLowerCase() ||
-              Number(j.status) !== 2 ||
-              j.freelancerRated
-            ) continue;
-            list.push({
-              id: i,
-              client: j.client,
-              amount: j.amount.toString(),
-            });
-          }
-          setRateJobs(list);
-        } else {
-          const list = [];
-          const stored = JSON.parse(localStorage.getItem('ratings') || '{}');
-          for (let i = 1; i <= cnt; i++) {
-            const j = await c.getJob(i);
-            const sv = await c.getService(Number(j.serviceId));
-            if (
-              sv.freelancer.toLowerCase() !== account.toLowerCase() ||
-              Number(j.status) !== 2 ||
-              !j.freelancerRated
-            ) continue;
+        const submitList = [];
+        const finalizeList = [];
 
-            const tokens = await c.getJobTokens(i);
-            const tokenId = tokens[1];
-            if (!stored[tokenId.toString()]) continue;
-
-            list.push({
-              id: i,
-              client: j.client,
-              amount: j.amount.toString(),
-            });
+        for (let i = 1; i <= cnt; i++) {
+          const j = await c.getJob(i);
+          const sv = await c.getService(Number(j.serviceId));
+          
+          // Only show jobs where this freelancer is involved and job is completed
+          if (sv.freelancer.toLowerCase() !== account.toLowerCase() || Number(j.status) !== 2) {
+            continue;
           }
-          setRevealJobs(list);
+
+          // Get freelancer's feedback token (index 1)
+          const [clientTokenId, freelancerTokenId] = await c.getJobTokens(i);
+          if (Number(freelancerTokenId) === 0) continue;
+
+          const token = await c.tokens(Number(freelancerTokenId));
+
+          const jobData = {
+            id: i,
+            client: j.client,
+            amount: j.amount.toString(),
+            tokenId: Number(freelancerTokenId),
+            token: token
+          };
+
+          if (!token.used) {
+            // Not yet submitted
+            submitList.push(jobData);
+          } else if (!token.applied) {
+            // Submitted but not applied
+            finalizeList.push(jobData);
+          }
         }
+        setRateJobs(submitList);
+        setRevealJobs(finalizeList);
       }
     } catch (e) {
       console.error("loadChain error:", e);
@@ -264,14 +257,23 @@ const FreelancerJobs = ({ account, signer, provider, toast }) => {
   };
 
   /* ── Commit Rating ────────────────────────────────────────────────── */
-  const handleCommit = async () => {
-    if (!stars) { toast("Select a star rating", "error"); return; }
+  const handleSubmitFeedback = async () => {
+    if (!score) { 
+      toast("Select a star rating", "error"); 
+      return; 
+    }
     if (userStake < MIN_STAKE) {
       toast("Insufficient stake. Deposit at least 0.05 ETH", "error");
       return;
     }
     setBusy(true);
     try {
+      if (!rateJob) {
+        toast("No job selected", "error");
+        setBusy(false);
+        return;
+      }
+
       const activeSigner = signer ?? provider?.getSigner();
       if (!activeSigner) {
         toast("Connect your wallet first", "error");
@@ -280,36 +282,25 @@ const FreelancerJobs = ({ account, signer, provider, toast }) => {
       }
 
       const c = new ethers.Contract(CONTRACT_ADDRESS, ABI, activeSigner);
-      const tokens = await c.getJobTokens(rateJob);
+      const tokens = await c.getJobTokens(rateJob.id);
       const tokenId = tokens[1]; // freelancer token
 
-      // Generate random salt
-      const salt = ethers.hexlify(ethers.randomBytes(32));
-
-      // Compute hash
-      const hash = ethers.keccak256(ethers.AbiCoder.defaultAbiCoder().encode(['uint256', 'string'], [stars, salt]));
-
-      const tx = await c.commitFeedback(tokenId, hash);
-      toast("Committing rating…");
+      const tx = await c.submitFeedback(tokenId, score);
+      toast("Submitting rating…");
       await tx.wait();
 
-      // Store score and salt in localStorage
-      const stored = JSON.parse(localStorage.getItem('ratings') || '{}');
-      stored[tokenId.toString()] = { score: stars, salt };
-      localStorage.setItem('ratings', JSON.stringify(stored));
-
-      toast("Rating committed!", "success");
+      toast("Rating submitted!", "success");
       await loadChain();
       setRateJob(null);
-      setStars(0);
+      setScore(0);
     } catch (e) {
       toast(e.reason ?? e.message ?? "Failed", "error");
     }
     setBusy(false);
   };
 
-  /* ── Reveal Rating ────────────────────────────────────────────────── */
-  const handleReveal = async (jobId) => {
+  /* ── Finalize Review ──────────────────────────────────────────────── */
+  const handleFinalizeReview = async (jobId) => {
     setBusy(true);
     try {
       const activeSigner = signer ?? provider?.getSigner();
@@ -320,26 +311,10 @@ const FreelancerJobs = ({ account, signer, provider, toast }) => {
       }
 
       const c = new ethers.Contract(CONTRACT_ADDRESS, ABI, activeSigner);
-      const tokens = await c.getJobTokens(jobId);
-      const tokenId = tokens[1];
-
-      const stored = JSON.parse(localStorage.getItem('ratings') || '{}');
-      const data = stored[tokenId.toString()];
-      if (!data) {
-        toast("Rating data not found", "error");
-        setBusy(false);
-        return;
-      }
-
-      const tx = await c.revealFeedback(tokenId, data.score, data.salt);
-      toast("Revealing rating…");
+      const tx = await c.finalizeReview(jobId);
+      toast("Finalizing rating…");
       await tx.wait();
-
-      // Remove from localStorage
-      delete stored[tokenId.toString()];
-      localStorage.setItem('ratings', JSON.stringify(stored));
-
-      toast("Rating revealed!", "success");
+      toast("Rating finalized!", "success");
       await loadChain();
     } catch (e) {
       toast(e.reason ?? e.message ?? "Failed", "error");
@@ -375,8 +350,8 @@ const FreelancerJobs = ({ account, signer, provider, toast }) => {
       {mode === 'rate' && (
         <Tabs
           tabs={[
-            { label: 'Commit Rating', value: 'commit' },
-            { label: 'Reveal Rating', value: 'reveal' },
+            { label: 'Submit Rating', value: 'submit' },
+            { label: 'Finalize Rating', value: 'finalize' },
           ]}
           active={rateMode}
           onChange={setRateMode}
@@ -389,15 +364,15 @@ const FreelancerJobs = ({ account, signer, provider, toast }) => {
             <p>No jobs assigned yet.</p>
           </div>
         </Card>
-      ) : mode === 'rate' && (rateMode === 'commit' ? rateJobs : revealJobs).length === 0 ? (
+      ) : mode === 'rate' && (rateMode === 'submit' ? rateJobs : revealJobs).length === 0 ? (
         <Card>
           <div className="empty-state">
-            <p>{rateMode === 'commit' ? 'No jobs to commit rating.' : 'No ratings to reveal.'} ✓</p>
+            <p>{rateMode === 'submit' ? 'No jobs to rate yet.' : 'No pending ratings to finalize.'} ✓</p>
           </div>
         </Card>
       ) : (
         <div className="fjobs-list">
-          {(mode === 'jobs' ? jobs : (rateMode === 'commit' ? rateJobs : revealJobs)).map((job) => {
+          {(mode === 'jobs' ? jobs : (rateMode === 'submit' ? rateJobs : revealJobs)).map((job) => {
             if (mode === 'jobs') {
             const hasWork = !isZeroCid(job.workCid);
             const accentColor = ["#4ade80","#fb923c","#38bdf8","#f87171"][job.status];
@@ -491,13 +466,13 @@ const FreelancerJobs = ({ account, signer, provider, toast }) => {
                       &nbsp;·&nbsp; Client <Chip addr={job.client} />
                     </p>
                   </div>
-                  {rateMode === 'commit' ? (
-                    <Btn accent="#10b981" onClick={() => setRateJob(job.id)}>
-                      Commit Rating ★
+                  {rateMode === 'submit' ? (
+                    <Btn accent="#10b981" onClick={() => setRateJob(job)}>
+                      Submit Rating ★
                     </Btn>
                   ) : (
-                    <Btn accent="#10b981" onClick={() => handleReveal(job.id)} loading={busy}>
-                      Reveal Rating
+                    <Btn accent="#10b981" onClick={() => handleFinalizeReview(job.id)} loading={busy}>
+                      Finalize Rating
                     </Btn>
                   )}
                 </Card>
@@ -535,29 +510,29 @@ const FreelancerJobs = ({ account, signer, provider, toast }) => {
         </div>
       </Modal>
 
-      {/* Commit rating modal */}
-      {mode === 'rate' && rateMode === 'commit' && (
+      {/* Submit rating modal */}
+      {mode === 'rate' && rateMode === 'submit' && (
         <Modal
           open={!!rateJob}
-          onClose={() => { setRateJob(null); setStars(0); }}
-          title={`Commit Rating · Job #${rateJob}`}
+          onClose={() => { setRateJob(null); setScore(0); }}
+          title={`Submit Rating · Job #${rateJob?.id ?? ''}`}
           accent="#10b981"
         >
           <div className="rate-modal__stars-wrap">
             <p className="rate-modal__prompt">
               How was the client? (1-5 stars)
             </p>
-            <Stars value={stars} onChange={setStars} />
+            <Stars value={score} onChange={setScore} />
             <p className="rate-modal__note">
-              Your rating will be committed anonymously. You can reveal it later.
+              Your rating will be submitted to the blockchain and applied after 7 days or when the client also rates you.
             </p>
           </div>
           <div className="modal__footer">
-            <Btn variant="ghost" onClick={() => { setRateJob(null); setStars(0); }}>
+            <Btn variant="ghost" onClick={() => { setRateJob(null); setScore(0); }}>
               Cancel
             </Btn>
-            <Btn onClick={handleCommit} loading={busy} accent="#10b981">
-              Commit Rating
+            <Btn onClick={handleSubmitFeedback} loading={busy} accent="#10b981">
+              Submit Rating
             </Btn>
           </div>
         </Modal>

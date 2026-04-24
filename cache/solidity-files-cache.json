@@ -1,9 +1,9 @@
 {
   "_format": "hh-sol-cache-2",
   "files": {
-    "C:\\Users\\devanshi mahto\\escrow-freelancer\\contracts\\FreelancerEscrow.sol": {
-      "lastModificationDate": 1776774010861,
-      "contentHash": "e14bb36ed108f4acf7816c0134ace864",
+    "/Users/prashantmahto/Decentralised-freelancer/CS218-Decentralised-Freelance-Platform/contracts/FreelancerEscrow.sol": {
+      "lastModificationDate": 1777010615989,
+      "contentHash": "76cc740d8a19c061d4486e1098670298",
       "sourceName": "contracts/FreelancerEscrow.sol",
       "solcConfig": {
         "version": "0.8.28",
@@ -33,14 +33,14 @@
         "@openzeppelin/contracts/utils/ReentrancyGuard.sol"
       ],
       "versionPragmas": [
-        "^0.8.20"
+        "0.8.28"
       ],
       "artifacts": [
-        "FreelanceEscrow"
+        "FreelanceEscrowV2"
       ]
     },
-    "C:\\Users\\devanshi mahto\\escrow-freelancer\\node_modules\\@openzeppelin\\contracts\\utils\\ReentrancyGuard.sol": {
-      "lastModificationDate": 1776772175042,
+    "/Users/prashantmahto/Decentralised-freelancer/CS218-Decentralised-Freelance-Platform/node_modules/@openzeppelin/contracts/utils/ReentrancyGuard.sol": {
+      "lastModificationDate": 1776795430809,
       "contentHash": "6e5efb502dd6652d12ad15eea2c5bdf4",
       "sourceName": "@openzeppelin/contracts/utils/ReentrancyGuard.sol",
       "solcConfig": {
@@ -77,8 +77,8 @@
         "ReentrancyGuard"
       ]
     },
-    "C:\\Users\\devanshi mahto\\escrow-freelancer\\node_modules\\@openzeppelin\\contracts\\utils\\StorageSlot.sol": {
-      "lastModificationDate": 1776772175138,
+    "/Users/prashantmahto/Decentralised-freelancer/CS218-Decentralised-Freelance-Platform/node_modules/@openzeppelin/contracts/utils/StorageSlot.sol": {
+      "lastModificationDate": 1776795430820,
       "contentHash": "e656d64c4ce918f3d13030b91c935134",
       "sourceName": "@openzeppelin/contracts/utils/StorageSlot.sol",
       "solcConfig": {
@@ -111,42 +111,6 @@
       ],
       "artifacts": [
         "StorageSlot"
-      ]
-    },
-    "C:\\Users\\devanshi mahto\\escrow-freelancer\\contracts\\Lock.sol": {
-      "lastModificationDate": 1776772064048,
-      "contentHash": "7eee587c347fe6b1de50c96688cb9477",
-      "sourceName": "contracts/Lock.sol",
-      "solcConfig": {
-        "version": "0.8.28",
-        "settings": {
-          "evmVersion": "paris",
-          "optimizer": {
-            "enabled": false,
-            "runs": 200
-          },
-          "outputSelection": {
-            "*": {
-              "*": [
-                "abi",
-                "evm.bytecode",
-                "evm.deployedBytecode",
-                "evm.methodIdentifiers",
-                "metadata"
-              ],
-              "": [
-                "ast"
-              ]
-            }
-          }
-        }
-      },
-      "imports": [],
-      "versionPragmas": [
-        "^0.8.28"
-      ],
-      "artifacts": [
-        "Lock"
       ]
     }
   }

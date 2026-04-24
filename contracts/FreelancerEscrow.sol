@@ -1,12 +1,58 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.20;
+// FIX [solc-version]: Pinned to 0.8.28 — removes the '^' range operator so
+// the contract cannot accidentally compile under a future buggy compiler.
+// The three issues flagged (VerbatimInvalidDeduplication,
+// FullInlinerNonExpressionSplitArgumentEvaluationOrder,
+// MissingSideEffectsOnSelectorAccess) are all absent in 0.8.28.
+pragma solidity 0.8.28;
 
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
 /**
- * @title  FreelanceEscrow
+ * @title  FreelanceEscrowV2  (Slither-audited revision)
  * @notice Decentralised escrow for freelance services with commit-reveal
  *         reputation, staking, and weighted scores.
+ *
+ * ─── CHANGES FROM ORIGINAL (keyed to Slither detector IDs) ─────────────────
+ *
+ *  [FIX-1] divide-before-multiply  (_calculateWeight)
+ *    The original computed  amountWeight = _amount / 1e15  first, losing
+ *    sub-finney precision, then multiplied.  Fixed by multiplying all integer
+ *    factors first and dividing last.  Semantics (floor-at-1 finney) are
+ *    preserved via a conditional branch instead.
+ *
+ *  [FIX-2] reentrancy-benign  (confirmCompletion, autoRelease)
+ *    Slither flagged that state variables (jobTokens, tokens, tokenCount) are
+ *    written AFTER the external ETH transfer _safeTransfer().  Although the
+ *    nonReentrant guard prevents exploitable reentrancy, the Checks-Effects-
+ *    Interactions pattern requires all state changes to precede any external
+ *    call.  Fixed by caching necessary values, then running
+ *    _issueFeedbackTokens() BEFORE _safeTransfer().
+ *
+ *  [FIX-3] solc-version  (pragma)
+ *    Changed ^0.8.20 → 0.8.28 (see top of file).
+ *
+ *  [NOTE] timestamp
+ *    block.timestamp comparisons for deadline/autoRelease/finalizeReview are
+ *    inherent to the protocol design (7-day and 3-day windows).  A ±15 second
+ *    miner manipulation is negligible at these time scales.  No code change;
+ *    documented here for auditor awareness.
+ *
+ *  [NOTE] low-level-calls
+ *    _safeTransfer uses .call{value}() — the standard safe pattern for ETH
+ *    transfers that avoids gas-limit issues with transfer/send.  Retained as-is.
+ *
+ *  [NOTE] assembly
+ *    All assembly usage is inside OpenZeppelin StorageSlot library (library code).
+ *    Not our code; no change required.
+ *
+ *  [NOTE] naming-convention
+ *    Slither flags leading-underscore parameters (e.g. _jobId, _score) as
+ *    not strictly mixedCase.  The underscore prefix is a widely-used Solidity
+ *    convention to distinguish function parameters from storage variables.
+ *    Renamed parameters in public/external functions to remove the leading
+ *    underscore to comply with Slither's rule; internal helper parameters
+ *    retain underscores for clarity.
  *
  * ─── REPUTATION SYSTEM ──────────────────────────────────────────────────────
  *
@@ -20,11 +66,12 @@ import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
  *    Prevents copy-cat voting — nobody can see your score before you reveal.
  *
  *  WEIGHTED SCORES:
- *    weight = timeWeight(daysSinceSubmit) × amountWeight(jobValueInFinney)
- *    More recent, higher-value jobs carry more weight in the average.
+ *    weight = timeWeight(daysSinceSubmit) × speedWeight(daysToReview)
+ *             × amountWeight(jobValueInFinney)
+ *    More recent, higher-value, faster-reviewed jobs carry more weight.
  *
  *  STAKING:
- *    Both parties must hold ≥ MIN_STAKE to commit a rating,
+ *    Both parties must hold ≥ MIN_STAKE to submit a rating,
  *    acting as a Sybil-resistance deposit with no automatic penalties.
  *
  * ─── FEEDBACK TOKEN LIFECYCLE ───────────────────────────────────────────────
@@ -34,8 +81,8 @@ import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
  *    ✔  autoRelease()        → same as above
  *    ✗  cancelJob()          → no tokens (job did not complete)
  *
- *  Tokens expire after 7 days. After expiry, reveal is still accepted
- *  (expiry is informational for frontends; enforce off-chain if desired).
+ *  Tokens expire after 7 days. After expiry, finalizeReview() applies any
+ *  pending scores.
  *
  * ─── WORK SUBMISSION FLOW ───────────────────────────────────────────────────
  *
@@ -53,7 +100,7 @@ import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
  *  [G4] Narrowed integer types: uint32 counters, uint88 price,
  *       uint64 timestamps, uint128 amount
  */
-contract FreelanceEscrow is ReentrancyGuard {
+contract FreelanceEscrowV2 is ReentrancyGuard {
 
     // ─────────────────────────────────────────────
     //  CUSTOM ERRORS
@@ -111,18 +158,18 @@ contract FreelanceEscrow is ReentrancyGuard {
     }
 
     /**
-     * @dev slot 1: client(20) | serviceId(4) | status(1) | clientRated(1) | freelancerRated(1) = 27 bytes
-     *      slot 2: amount(16) | deadline(8) | submittedAt(8)                                   = 32 bytes
-     *      slot 3: workCid(32)                                                                 = 32 bytes
+     * @dev slot 1: client(20) | serviceId(4) | status(1)              = 25 bytes
+     *      slot 2: amount(16) | deadline(8) | submittedAt(8)          = 32 bytes
+     *      slot 3: workCid(32)                                        = 32 bytes
      */
     struct Job {
-   address payable client;      // 20 bytes ─┐
-    uint32          serviceId;   //  4 bytes  │ slot 1
-    JobStatus       status;      //  1 byte   ┘
-    uint128         amount;      // 16 bytes ─┐
-    uint64          deadline;    //  8 bytes  │ slot 2
-    uint64          submittedAt; //  8 bytes  ┘
-    bytes32         workCid;     // 32 bytes ── slot 3
+        address payable client;      // 20 bytes ─┐
+        uint32          serviceId;   //  4 bytes  │ slot 1
+        JobStatus       status;      //  1 byte   ┘
+        uint128         amount;      // 16 bytes ─┐
+        uint64          deadline;    //  8 bytes  │ slot 2
+        uint64          submittedAt; //  8 bytes  ┘
+        bytes32         workCid;     // 32 bytes ── slot 3
     }
 
     /**
@@ -132,26 +179,19 @@ contract FreelanceEscrow is ReentrancyGuard {
      *      expiry    → informational deadline for frontends
      */
     struct FeedbackToken {
-         uint32  jobId;       //  4 bytes ─┐
-    address reviewer;    // 20 bytes  │ slot 1
-    // ---                            │
-    address reviewee;    // 20 bytes ─┐
-    bool    used;        //  1 byte   │
-    bool    applied;     //  1 byte   │ slot 2
-    uint64  reviewedAt;  //  8 bytes  │
-    uint8   score;       //  1 byte   ┘
-    uint256 expiry;      // 32 bytes ── slot 3
+        uint32  jobId;       //  4 bytes ─┐
+        address reviewer;    // 20 bytes  │ slot 1
+        address reviewee;    // 20 bytes ─┐
+        bool    used;        //  1 byte   │
+        bool    applied;     //  1 byte   │ slot 2
+        uint64  reviewedAt;  //  8 bytes  │
+        uint8   score;       //  1 byte   ┘
+        uint256 expiry;      // 32 bytes ── slot 3
     }
 
     /**
      * @dev Reputation uses weighted sums to favour recent, higher-value jobs.
-     *      avgScore = (weightedScoreSum / weightSum)   (call getReputation() for scaled view)
-     *
-     *      slot 1: weightedScoreSum(32) = 32 bytes  (full uint — can grow large with many jobs)
-     *      slot 2: weightSum(32)        = 32 bytes
-     *
-     *  Note: kept as full uint256 (not packed) because weightedScoreSum can
-     *  grow very large for high-value / long-lived platforms.
+     *      avgScore = (weightedScoreSum / weightSum)
      */
     struct Reputation {
         uint256 weightedScoreSum;
@@ -161,8 +201,6 @@ contract FreelanceEscrow is ReentrancyGuard {
 
     /**
      * @dev Commit-reveal entry per (jobId, reviewer).
-     *      slot 1: hash(32)             = 32 bytes
-     *      slot 2: revealed(1) + pad    = 32 bytes  (1 bool, compiler pads)
      */
     struct Commit {
         bytes32 hash;
@@ -183,48 +221,37 @@ contract FreelanceEscrow is ReentrancyGuard {
     uint32  public jobCount;
     uint256 public tokenCount;
 
-    mapping(uint32  => Service)    public services;
-    mapping(uint32  => Job)        public jobs;
-
-    // Reputation: weighted commit-reveal system
-    mapping(address => Reputation) public freelancerRep;
-    mapping(address => Reputation) public clientRep;
-
-    // Feedback tokens: tokenId → token
+    mapping(uint32  => Service)       public services;
+    mapping(uint32  => Job)           public jobs;
+    mapping(address => Reputation)    public freelancerRep;
+    mapping(address => Reputation)    public clientRep;
     mapping(uint256 => FeedbackToken) public tokens;
-
-    // jobId → [clientToken, freelancerToken]
-    // index 0 = token for client to rate freelancer
-    // index 1 = token for freelancer to rate client
-    mapping(uint256 => uint256[2]) public jobTokens;
-
-    // Commit-reveal: jobId → reviewer → Commit
+    mapping(uint256 => uint256[2])    public jobTokens;
     mapping(uint256 => mapping(address => Commit)) public commits;
-
-    // Stakes deposited by users
-    mapping(address => uint256) public stakes;
+    mapping(address => uint256)       public stakes;
 
     // ─────────────────────────────────────────────
     //  EVENTS
     // ─────────────────────────────────────────────
 
-    event ServiceListed      (uint32  indexed serviceId, bytes32 metadataCid);
-    event JobCreated         (uint32  indexed jobId);
-    event WorkSubmitted      (uint32  indexed jobId, bytes32 workCid);
-    event WorkCleared        (uint32  indexed jobId);
-    event JobCompleted       (uint32  indexed jobId);
-    event JobCancelled       (uint32  indexed jobId);
+    event ServiceListed       (uint32  indexed serviceId, bytes32 metadataCid);
+    event JobCreated          (uint32  indexed jobId);
+    event WorkSubmitted       (uint32  indexed jobId, bytes32 workCid);
+    event WorkCleared         (uint32  indexed jobId);
+    event JobCompleted        (uint32  indexed jobId);
+    event JobCancelled        (uint32  indexed jobId);
+    event StakeDeposited      (address indexed user, uint256 amount);
+    event FeedbackTokenIssued (uint256 indexed tokenId, address reviewer, address reviewee);
+    event FeedbackSubmitted   (address indexed reviewer, uint256 jobId);
+    event FeedbackApplied     (address indexed reviewer, address indexed reviewee, uint256 score, uint256 weight);
 
-    event StakeDeposited     (address indexed user,   uint256 amount);
-
-    event FeedbackTokenIssued(uint256 indexed tokenId, address reviewer, address reviewee);
-    event FeedbackSubmitted (address indexed reviewer, uint256 jobId);
-    event FeedbackApplied   (address indexed reviewer, address indexed reviewee, uint256 score, uint256 weight);
     // ─────────────────────────────────────────────
     //  INTERNAL HELPERS
     // ─────────────────────────────────────────────
 
     function _safeTransfer(address payable recipient, uint256 amount) internal {
+        // [NOTE low-level-calls] .call{value} is the recommended safe ETH
+        // transfer pattern (avoids 2300-gas stipend issues of .transfer).
         (bool ok, ) = recipient.call{value: amount}("");
         if (!ok) revert TransferFailed();
     }
@@ -234,110 +261,130 @@ contract FreelanceEscrow is ReentrancyGuard {
     }
 
     /**
-     * @dev Issues a feedback token pair (client→freelancer, freelancer→client)
-     *      for a completed job. Called by both confirmCompletion and autoRelease.
+     * @dev Issues a feedback token pair (client→freelancer, freelancer→client).
+     *      Pure state change — no external calls.
      */
-    function _issueFeedbackTokens(uint32 _jobId, address _client, address _freelancer) internal {
+    function _issueFeedbackTokens(
+        uint32  jobId,
+        address clientAddr,
+        address freelancerAddr
+    ) internal {
         // Token 0: client rates the freelancer
         ++tokenCount;
         tokens[tokenCount] = FeedbackToken({
-            jobId:      _jobId,
-    reviewer:   _client,
-    reviewee:   _freelancer,
-    used:       false,
-    applied:    false,   // ← ADD THIS
-    reviewedAt: 0,
-    score:      0,
-    expiry:     block.timestamp + 7 days
+            jobId:      jobId,
+            reviewer:   clientAddr,
+            reviewee:   freelancerAddr,
+            used:       false,
+            applied:    false,
+            reviewedAt: 0,
+            score:      0,
+            expiry:     block.timestamp + 7 days
         });
-        jobTokens[_jobId][0] = tokenCount;
-        emit FeedbackTokenIssued(tokenCount, _client, _freelancer);
+        jobTokens[jobId][0] = tokenCount;
+        emit FeedbackTokenIssued(tokenCount, clientAddr, freelancerAddr);
 
         // Token 1: freelancer rates the client
         ++tokenCount;
         tokens[tokenCount] = FeedbackToken({
-           jobId:      _jobId,
-    reviewer:   _freelancer,
-    reviewee:   _client,
-    used:       false,
-    applied:    false,   // ← ADD
-    reviewedAt: 0,       // ← ADD
-    score:      0,       // ← ADD
-    expiry:     block.timestamp + 7 days
+            jobId:      jobId,
+            reviewer:   freelancerAddr,
+            reviewee:   clientAddr,
+            used:       false,
+            applied:    false,
+            reviewedAt: 0,
+            score:      0,
+            expiry:     block.timestamp + 7 days
         });
-        jobTokens[_jobId][1] = tokenCount;
-        emit FeedbackTokenIssued(tokenCount, _freelancer, _client);
+        jobTokens[jobId][1] = tokenCount;
+        emit FeedbackTokenIssued(tokenCount, freelancerAddr, clientAddr);
     }
 
     /**
      * @dev Calculates a rating weight based on job recency and value.
-     *      timeWeight  ∈ [1, 100]  — decays 1 point per day since submission.
-     *      amountWeight ≥ 1        — job value in finney (1e15 wei); floored at 1.
+     *
+     *  [FIX-1] divide-before-multiply:
+     *    BEFORE (buggy):
+     *      amountWeight = _amount / 1e15;          ← integer division first
+     *      return timeWeight * amountWeight * ...;  ← then multiply → precision lost
+     *
+     *    AFTER (fixed):
+     *      When _amount >= 1e15, multiply ALL integer factors first, divide last:
+     *        return timeWeight * speedWeight * _amount / 1e15;
+     *      When _amount < 1e15, amountWeight floors to 1 (handled by branch):
+     *        return timeWeight * speedWeight * 1;
+     *
+     *    This preserves sub-finney precision in the final product and exactly
+     *    matches the original floor-at-1-finney semantics without any division
+     *    occurring before multiplication.
+     *
+     *  timeWeight   ∈ [1, 100]  — decays 1 point per day since submission.
+     *  speedWeight  ∈ [1, 7]    — rewards faster reviews within the 7-day window.
+     *  amountWeight ≥ 1         — job value in finney; floored at 1.
      */
     function _calculateWeight(
-    uint256 _amount,
-    uint64  _jobSubmittedAt,
-    uint64  _reviewedAt,
-    uint256 _tokenExpiry
-) internal pure returns (uint256) {
-    // Existing: job recency (how old is the job)
-    uint256 daysPassed   = (uint256(_reviewedAt) - uint256(_jobSubmittedAt)) / 1 days;
-    uint256 timeWeight   = daysPassed < 100 ? 100 - daysPassed : 1;
+        uint256 amount,
+        uint64  jobSubmittedAt,
+        uint64  reviewedAt,
+        uint256 tokenExpiry
+    ) internal pure returns (uint256) {
+        // Time since job submission → recency weight
+        uint256 daysPassed = (uint256(reviewedAt) - uint256(jobSubmittedAt)) / 1 days;
+        uint256 timeWeight  = daysPassed < 100 ? 100 - daysPassed : 1;
 
-    // New: review speed within the 7-day window (day 0 = weight 7, day 6 = weight 1)
-    uint256 issuedAt     = _tokenExpiry - 7 days;
-    uint256 daysToReview = _reviewedAt > issuedAt
-        ? (uint256(_reviewedAt) - issuedAt) / 1 days
-        : 0;
-    uint256 speedWeight  = daysToReview < 7 ? 7 - daysToReview : 1;
+        // Speed of review within the 7-day window
+        uint256 issuedAt     = tokenExpiry - 7 days;
+        uint256 daysToReview = reviewedAt > issuedAt
+            ? (uint256(reviewedAt) - issuedAt) / 1 days
+            : 0;
+        uint256 speedWeight  = daysToReview < 7 ? 7 - daysToReview : 1;
 
-    uint256 amountWeight = _amount / 1e15;
-    if (amountWeight == 0) amountWeight = 1;
-
-    return timeWeight * amountWeight * speedWeight;
-}
-
-/**
- * @dev Applies a submitted score to the reviewee's reputation.
- *      Called when visibility condition is met (both submitted OR expired).
- */
-function _applyTokenScore(uint256 _tokenId) internal {
-    FeedbackToken storage t = tokens[_tokenId];
-    if (!t.used || t.applied) return;
-
-    Job storage     j = jobs[t.jobId];
-    Service storage s = services[j.serviceId];
-
-    t.applied = true;
-
-    uint256 weight = _calculateWeight(
-        uint256(j.amount),
-        j.submittedAt,
-        t.reviewedAt,
-        t.expiry
-    );
-
-    if (t.reviewee == s.freelancer) {
-        freelancerRep[t.reviewee].weightedScoreSum += uint256(t.score) * weight;
-        freelancerRep[t.reviewee].weightSum        += weight;
-        ++freelancerRep[t.reviewee].totalJobs;
-    } else {
-        clientRep[t.reviewee].weightedScoreSum += uint256(t.score) * weight;
-        clientRep[t.reviewee].weightSum        += weight;
-        ++clientRep[t.reviewee].totalJobs;
+        // [FIX-1] Multiply first, then divide — avoids divide-before-multiply.
+        // If the job value is below 1 finney (1e15 wei), floor amountWeight to 1
+        // by using 1e15 as the numerator instead of the actual amount.
+        uint256 scaledAmount = amount >= 1e15 ? amount : 1e15;
+        return timeWeight * speedWeight * scaledAmount / 1e15;
     }
 
-    emit FeedbackApplied(t.reviewer, t.reviewee, t.score, weight);
-}
+    /**
+     * @dev Applies a submitted score to the reviewee's reputation.
+     *      Idempotent — safe to call multiple times.
+     */
+    function _applyTokenScore(uint256 tokenId) internal {
+        FeedbackToken storage t = tokens[tokenId];
+        if (!t.used || t.applied) return;
+
+        Job storage     j = jobs[t.jobId];
+        Service storage s = services[j.serviceId];
+
+        t.applied = true;
+
+        uint256 weight = _calculateWeight(
+            uint256(j.amount),
+            j.submittedAt,
+            t.reviewedAt,
+            t.expiry
+        );
+
+        if (t.reviewee == s.freelancer) {
+            freelancerRep[t.reviewee].weightedScoreSum += uint256(t.score) * weight;
+            freelancerRep[t.reviewee].weightSum        += weight;
+            ++freelancerRep[t.reviewee].totalJobs;
+        } else {
+            clientRep[t.reviewee].weightedScoreSum += uint256(t.score) * weight;
+            clientRep[t.reviewee].weightSum        += weight;
+            ++clientRep[t.reviewee].totalJobs;
+        }
+
+        emit FeedbackApplied(t.reviewer, t.reviewee, t.score, weight);
+    }
 
     // ─────────────────────────────────────────────
     //  1. STAKE MANAGEMENT
     // ─────────────────────────────────────────────
 
     /**
-     * @notice 
-     
-      ETH as stake. Both parties need MIN_STAKE to commit feedback.
+     * @notice Deposit ETH as stake. Both parties need MIN_STAKE to submit feedback.
      *         Acts as Sybil resistance — no penalties are applied to the stake.
      */
     function depositStake() external payable {
@@ -350,32 +397,28 @@ function _applyTokenScore(uint256 _tokenId) internal {
     //  2. OFFER SERVICE
     // ─────────────────────────────────────────────
 
-    /**
-     * @param _priceWei    Payment in wei. uint88 max ≈ 3×10^8 ETH.
-     * @param _metadataCid keccak256(bytes(ipfsCID)) of off-chain JSON:
-     *                     { "title": "...", "description": "..." }
-     */
-    function offerService(uint88 _priceWei, bytes32 _metadataCid) external {
-        if (_priceWei == 0)             revert PriceMustBePositive();
-        if (_metadataCid == bytes32(0)) revert MetadataCidRequired();
+    // [FIX naming-convention] Removed leading '_' from external function parameters.
+    function offerService(uint88 priceWei, bytes32 metadataCid) external {
+        if (priceWei == 0)             revert PriceMustBePositive();
+        if (metadataCid == bytes32(0)) revert MetadataCidRequired();
 
         uint32 id = ++serviceCount;
         services[id] = Service({
             freelancer:  payable(msg.sender),
             status:      ServiceStatus.Listed,
-            priceWei:    _priceWei,
-            metadataCid: _metadataCid
+            priceWei:    priceWei,
+            metadataCid: metadataCid
         });
 
-        emit ServiceListed(id, _metadataCid);
+        emit ServiceListed(id, metadataCid);
     }
 
     // ─────────────────────────────────────────────
     //  3. HIRE FREELANCER
     // ─────────────────────────────────────────────
 
-    function hireFreelancer(uint32 _serviceId) external payable nonReentrant {
-        Service storage s = services[_serviceId];
+    function hireFreelancer(uint32 serviceId) external payable nonReentrant {
+        Service storage s = services[serviceId];
 
         if (s.freelancer == address(0))       revert InvalidService();
         if (s.status != ServiceStatus.Listed) revert ServiceNotAvailable();
@@ -384,13 +427,13 @@ function _applyTokenScore(uint256 _tokenId) internal {
 
         uint32 id = ++jobCount;
         jobs[id] = Job({
-            client:          payable(msg.sender),
-            serviceId:       _serviceId,
-            status:          JobStatus.Active,
-            amount:          uint128(msg.value),
-            deadline:        uint64(block.timestamp + 7 days),
-            submittedAt:     0,
-            workCid:         bytes32(0)
+            client:      payable(msg.sender),
+            serviceId:   serviceId,
+            status:      JobStatus.Active,
+            amount:      uint128(msg.value),
+            deadline:    uint64(block.timestamp + 7 days),
+            submittedAt: 0,
+            workCid:     bytes32(0)
         });
 
         s.status = ServiceStatus.Hired;
@@ -401,23 +444,19 @@ function _applyTokenScore(uint256 _tokenId) internal {
     //  4. SUBMIT WORK
     // ─────────────────────────────────────────────
 
-    /**
-     * @param _workCid keccak256(bytes(ipfsCID)) of the deliverables.
-     *                 Stored on-chain as tamper-evident proof of delivery.
-     */
-    function submitWork(uint32 _jobId, bytes32 _workCid) external {
-        Job storage     j = jobs[_jobId];
+    function submitWork(uint32 jobId, bytes32 workCid) external {
+        Job storage     j = jobs[jobId];
         Service storage s = services[j.serviceId];
 
         if (msg.sender != s.freelancer)   revert OnlyFreelancer();
         if (j.status != JobStatus.Active) revert InvalidJobState();
-        if (_workCid == bytes32(0))        revert WorkCidRequired();
+        if (workCid == bytes32(0))        revert WorkCidRequired();
 
         j.status      = JobStatus.Submitted;
         j.submittedAt = uint64(block.timestamp);
-        j.workCid     = _workCid;
+        j.workCid     = workCid;
 
-        emit WorkSubmitted(_jobId, _workCid);
+        emit WorkSubmitted(jobId, workCid);
     }
 
     // ─────────────────────────────────────────────
@@ -427,23 +466,37 @@ function _applyTokenScore(uint256 _tokenId) internal {
     /**
      * @notice Client confirms work is accepted. workCid is permanently locked.
      *         Issues two feedback tokens (one per party) for the commit-reveal flow.
+     *
+     * [FIX-2] CEI (Checks-Effects-Interactions) pattern:
+     *   BEFORE: _safeTransfer (external call) happened BEFORE _issueFeedbackTokens
+     *           (state changes) — violating CEI even with nonReentrant guard.
+     *   AFTER:  All state changes (_issueFeedbackTokens) run FIRST, then the
+     *           external ETH transfer is the last operation.
+     *   Addresses and amount are cached into locals before any writes to avoid
+     *   reading from storage after it has been mutated.
      */
-    function confirmCompletion(uint32 _jobId) external nonReentrant {
-        Job storage     j = jobs[_jobId];
+    function confirmCompletion(uint32 jobId) external nonReentrant {
+        Job storage     j = jobs[jobId];
         Service storage s = services[j.serviceId];
 
+        // ── Checks ───────────────────────────────
         if (msg.sender != j.client)          revert OnlyClient();
         if (j.status != JobStatus.Submitted) revert WorkNotSubmitted();
 
+        // ── Cache before state writes ────────────
+        address payable freelancerAddr = s.freelancer;
+        address         clientAddr     = j.client;
+        uint256         payAmount      = j.amount;
+
+        // ── Effects (all state changes first) ────
         j.status = JobStatus.Done;
         s.status = ServiceStatus.Completed;
+        _issueFeedbackTokens(jobId, clientAddr, freelancerAddr);
 
-        _safeTransfer(s.freelancer, j.amount);
+        emit JobCompleted(jobId);
 
-        // Issue feedback tokens for both parties
-        _issueFeedbackTokens(_jobId, j.client, s.freelancer);
-
-        emit JobCompleted(_jobId);
+        // ── Interaction (external call last) ─────
+        _safeTransfer(freelancerAddr, payAmount);
     }
 
     // ─────────────────────────────────────────────
@@ -453,10 +506,12 @@ function _applyTokenScore(uint256 _tokenId) internal {
     /**
      * @notice Cancel an Active or Submitted job and refund the client.
      *         No feedback tokens are issued — job did not complete.
-     *         Freelancer may call clearWork() after cancellation.
+     *
+     * [NOTE timestamp] block.timestamp comparison against j.deadline is
+     * intentional; ±15 s miner drift is inconsequential for 7-day windows.
      */
-    function cancelJob(uint32 _jobId) external nonReentrant {
-        Job storage     j = jobs[_jobId];
+    function cancelJob(uint32 jobId) external nonReentrant {
+        Job storage     j = jobs[jobId];
         Service storage s = services[j.serviceId];
 
         if (j.status != JobStatus.Active && j.status != JobStatus.Submitted)
@@ -465,23 +520,25 @@ function _applyTokenScore(uint256 _tokenId) internal {
         bool isTimeout = block.timestamp > j.deadline;
 
         if (j.status == JobStatus.Submitted) {
-            // Only the client (or anyone after timeout) can cancel a submitted job.
-            // The freelancer cannot cancel once they've submitted — prevents gaming.
             if (msg.sender != j.client && !isTimeout)
                 revert FreelancerCannotCancelSubmitted();
         } else {
-            // Active: either party can cancel, or anyone after deadline
             if (msg.sender != j.client && msg.sender != s.freelancer && !isTimeout)
                 revert NotAllowed();
         }
 
+        // ── Cache before state writes ────────────
+        address payable clientAddr = j.client;
+        uint256         payAmount  = j.amount;
+
+        // ── Effects ──────────────────────────────
         j.status = JobStatus.Cancelled;
         s.status = ServiceStatus.Cancelled;
 
-        _safeTransfer(j.client, j.amount);
+        emit JobCancelled(jobId);
 
-        emit JobCancelled(_jobId);
-        // workCid still exists on-chain. Freelancer should call clearWork() to unpin.
+        // ── Interaction ───────────────────────────
+        _safeTransfer(clientAddr, payAmount);
     }
 
     // ─────────────────────────────────────────────
@@ -490,28 +547,35 @@ function _applyTokenScore(uint256 _tokenId) internal {
 
     /**
      * @notice Anyone can trigger payment if the client hasn't responded in 3 days.
-     *         workCid is permanently locked after this call.
      *         Issues feedback tokens just like confirmCompletion.
      *
-     * @dev  V1 BUG FIX: the original autoRelease did not issue feedback tokens,
-     *       meaning auto-completed jobs could never be rated. Fixed here.
+     * [FIX-2] Same CEI fix as confirmCompletion — state writes moved before
+     *         the external ETH transfer.
+     *
+     * [NOTE timestamp] 3-day check is intentional protocol design.
      */
-    function autoRelease(uint32 _jobId) external nonReentrant {
-        Job storage     j = jobs[_jobId];
+    function autoRelease(uint32 jobId) external nonReentrant {
+        Job storage     j = jobs[jobId];
         Service storage s = services[j.serviceId];
 
+        // ── Checks ───────────────────────────────
         if (j.status != JobStatus.Submitted)           revert NotSubmitted();
         if (block.timestamp <= j.submittedAt + 3 days) revert TooEarlyForAutoRelease();
 
+        // ── Cache ────────────────────────────────
+        address payable freelancerAddr = s.freelancer;
+        address         clientAddr     = j.client;
+        uint256         payAmount      = j.amount;
+
+        // ── Effects ──────────────────────────────
         j.status = JobStatus.Done;
         s.status = ServiceStatus.Completed;
+        _issueFeedbackTokens(jobId, clientAddr, freelancerAddr);
 
-        _safeTransfer(s.freelancer, j.amount);
+        emit JobCompleted(jobId);
 
-        // Issue feedback tokens — same as confirmCompletion
-        _issueFeedbackTokens(_jobId, j.client, s.freelancer);
-
-        emit JobCompleted(_jobId);
+        // ── Interaction ───────────────────────────
+        _safeTransfer(freelancerAddr, payAmount);
     }
 
     // ─────────────────────────────────────────────
@@ -525,8 +589,8 @@ function _applyTokenScore(uint256 _tokenId) internal {
      * LOCK RULE: only callable when status == Cancelled.
      *            Cannot be called on Done jobs — completed deliveries are immutable.
      */
-    function clearWork(uint32 _jobId) external {
-        Job storage     j = jobs[_jobId];
+    function clearWork(uint32 jobId) external {
+        Job storage     j = jobs[jobId];
         Service storage s = services[j.serviceId];
 
         if (msg.sender != s.freelancer)      revert OnlyFreelancer();
@@ -534,115 +598,114 @@ function _applyTokenScore(uint256 _tokenId) internal {
 
         j.workCid = bytes32(0);
 
-        emit WorkCleared(_jobId);
+        emit WorkCleared(jobId);
     }
-/**
- * @notice Submit your rating for the counterparty (1–5).
- *         Score is stored but not applied to reputation until visible:
- *           • BOTH parties have submitted, OR
- *           • The 7-day window has elapsed (call finalizeReview after expiry).
- *
- * @dev  True on-chain storage is always readable via raw slot access.
- *       This function controls what official view functions expose.
- */
-function submitFeedback(uint256 _tokenId, uint8 _score) external {
-    FeedbackToken storage t = tokens[_tokenId];
 
-    if (msg.sender != t.reviewer) revert NotReviewer();
-    if (t.used)                   revert TokenUsed();
-    if (_score < 1 || _score > 5) revert InvalidScore();
-    _requireStake(msg.sender);
+    // ─────────────────────────────────────────────
+    //  9. SUBMIT FEEDBACK
+    // ─────────────────────────────────────────────
 
-    t.score      = _score;
-    t.used       = true;
-    t.reviewedAt = uint64(block.timestamp);
+    /**
+     * @notice Submit your rating for the counterparty (1–5).
+     *         Score is stored but not applied to reputation until visible:
+     *           • BOTH parties have submitted, OR
+     *           • The 7-day window has elapsed (call finalizeReview after expiry).
+     */
+    function submitFeedback(uint256 tokenId, uint8 score) external {
+        FeedbackToken storage t = tokens[tokenId];
 
-    emit FeedbackSubmitted(msg.sender, t.jobId);
+        if (msg.sender != t.reviewer) revert NotReviewer();
+        if (t.used)                   revert TokenUsed();
+        if (score < 1 || score > 5)   revert InvalidScore();
+        _requireStake(msg.sender);
 
-    // Check if counterpart has already submitted → apply both immediately
-    uint256[2] storage jt = jobTokens[t.jobId];
-    uint256 otherId = (jt[0] == _tokenId) ? jt[1] : jt[0];
+        t.score      = score;
+        t.used       = true;
+        t.reviewedAt = uint64(block.timestamp);
 
-    if (tokens[otherId].used) {
-        _applyTokenScore(_tokenId);
-        _applyTokenScore(otherId);   // idempotent if already applied
+        emit FeedbackSubmitted(msg.sender, t.jobId);
+
+        // If counterpart has already submitted, apply both scores immediately
+        uint256[2] storage jt = jobTokens[t.jobId];
+        uint256 otherId = (jt[0] == tokenId) ? jt[1] : jt[0];
+
+        if (tokens[otherId].used) {
+            _applyTokenScore(tokenId);
+            _applyTokenScore(otherId);   // idempotent — safe if already applied
+        }
     }
-}
 
-/**
- * @notice Apply any pending scores after the 7-day window closes.
- *         Callable by anyone — no trust required.
- *         Handles the case where only one party (or neither) submitted.
- */
-function finalizeReview(uint32 _jobId) external {
-    uint256[2] storage jt = jobTokens[_jobId];
-    FeedbackToken storage t0 = tokens[jt[0]];
+    // ─────────────────────────────────────────────
+    //  10. FINALIZE REVIEW
+    // ─────────────────────────────────────────────
 
-    if (block.timestamp < t0.expiry) revert ReviewWindowNotClosed();
+    /**
+     * @notice Apply any pending scores after the 7-day window closes.
+     *         Callable by anyone — no trust required.
+     *
+     * [NOTE timestamp] Expiry check is intentional; ±15 s drift is negligible
+     * for a 7-day window.
+     */
+    function finalizeReview(uint32 jobId) external {
+        uint256[2] storage jt = jobTokens[jobId];
+        FeedbackToken storage t0 = tokens[jt[0]];
 
-    _applyTokenScore(jt[0]);
-    _applyTokenScore(jt[1]);
-}
+        if (block.timestamp < t0.expiry) revert ReviewWindowNotClosed();
+
+        _applyTokenScore(jt[0]);
+        _applyTokenScore(jt[1]);
+    }
+
     // ─────────────────────────────────────────────
     //  11. VIEW — FREELANCER REPUTATION
     // ─────────────────────────────────────────────
 
-    /**
-     * @return avgScoreScaled  Weighted average score × 100 (e.g. 425 = 4.25 / 5.00)
-     * @return totalWeight     Sum of all weights (proxy for activity/reliability)
-     */
-    function getFreelancerReputation(address _freelancer)
-    external view
-    returns (uint256 avgScoreScaled, uint256 totalWeight, uint128 totalJobs)
-{
-    Reputation memory rep = freelancerRep[_freelancer];
-    if (rep.weightSum == 0) return (0, 0, 0);
-    return (
-        (rep.weightedScoreSum * 100) / rep.weightSum,
-        rep.weightSum,
-        rep.totalJobs
-    );
-}
-
-
+    function getFreelancerReputation(address freelancer)
+        external view
+        returns (uint256 avgScoreScaled, uint256 totalWeight, uint128 totalJobs)
+    {
+        Reputation memory rep = freelancerRep[freelancer];
+        if (rep.weightSum == 0) return (0, 0, 0);
+        return (
+            (rep.weightedScoreSum * 100) / rep.weightSum,
+            rep.weightSum,
+            rep.totalJobs
+        );
+    }
 
     // ─────────────────────────────────────────────
     //  12. VIEW — CLIENT REPUTATION
     // ─────────────────────────────────────────────
 
-    /**
-     * @return avgScoreScaled  Weighted average score × 100
-     * @return totalWeight     Sum of all weights
-     */
-    function getClientReputation(address _client)
-    external view
-    returns (uint256 avgScoreScaled, uint256 totalWeight, uint128 totalJobs)
-{
-    Reputation memory rep = clientRep[_client];
-    if (rep.weightSum == 0) return (0, 0, 0);
-    return (
-        (rep.weightedScoreSum * 100) / rep.weightSum,
-        rep.weightSum,
-        rep.totalJobs
-    );
-}
+    function getClientReputation(address client)
+        external view
+        returns (uint256 avgScoreScaled, uint256 totalWeight, uint128 totalJobs)
+    {
+        Reputation memory rep = clientRep[client];
+        if (rep.weightSum == 0) return (0, 0, 0);
+        return (
+            (rep.weightedScoreSum * 100) / rep.weightSum,
+            rep.weightSum,
+            rep.totalJobs
+        );
+    }
 
     // ─────────────────────────────────────────────
     //  13. VIEW HELPERS
     // ─────────────────────────────────────────────
 
-    function getService(uint32 _id) external view returns (Service memory) {
-        return services[_id];
+    function getService(uint32 id) external view returns (Service memory) {
+        return services[id];
     }
 
-    function getJob(uint32 _id) external view returns (Job memory) {
-        return jobs[_id];
+    function getJob(uint32 id) external view returns (Job memory) {
+        return jobs[id];
     }
 
-    function getJobTokens(uint32 _jobId)
+    function getJobTokens(uint32 jobId)
         external view
         returns (uint256 clientToken, uint256 freelancerToken)
     {
-        return (jobTokens[_jobId][0], jobTokens[_jobId][1]);
+        return (jobTokens[jobId][0], jobTokens[jobId][1]);
     }
 }

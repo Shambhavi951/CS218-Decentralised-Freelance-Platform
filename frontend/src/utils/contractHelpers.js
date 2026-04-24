@@ -107,6 +107,9 @@ export const getPendingFeedbackJobs = async (account, role, provider) => {
 
 /**
  * Submit feedback for a job
+ * @param {number} tokenId - Feedback token ID
+ * @param {number} score - Rating 1-5
+ * @param {Signer} signer - Ethers signer
  */
 export const submitFeedback = async (tokenId, score, signer) => {
   if (score < 1 || score > 5) throw new Error("Score must be 1-5");
@@ -118,6 +121,8 @@ export const submitFeedback = async (tokenId, score, signer) => {
 
 /**
  * Finalize review after 7-day window closes
+ * @param {number} jobId - Job ID to finalize
+ * @param {Signer} signer - Ethers signer
  */
 export const finalizeReview = async (jobId, signer) => {
   const contract = getContract(signer);
@@ -127,6 +132,8 @@ export const finalizeReview = async (jobId, signer) => {
 
 /**
  * Deposit stake for reputation participation
+ * @param {BigInt} amount - Amount in wei
+ * @param {Signer} signer - Ethers signer
  */
 export const depositStake = async (amount, signer) => {
   const contract = getContract(signer);

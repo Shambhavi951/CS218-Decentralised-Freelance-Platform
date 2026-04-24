@@ -15,10 +15,15 @@ const Reputation = ({ account, signer, provider, toast }) => {
 
   const loadChain = async () => {
     if (!signer && !provider) return;
+    if (!CONTRACT_ADDRESS) {
+      toast("Failed to load reputation: contract address is not configured", "error");
+      return;
+    }
+
     try {
       const c = new ethers.Contract(CONTRACT_ADDRESS, ABI, provider ?? signer);
-      const [avg, total] = await c.getFreelancerReputation(account);
-      setRep({ avg: Number(avg), total: Number(total) });
+      const [avgScoreScaled, totalWeight, totalJobs] = await c.getFreelancerReputation(account);
+      setRep({ avg: Number(avgScoreScaled), weight: Number(totalWeight), jobs: Number(totalJobs) });
     } catch (e) {
       toast("Failed to load reputation: " + e.message, "error");
     }
@@ -49,7 +54,7 @@ const Reputation = ({ account, signer, provider, toast }) => {
 
           {/* Total jobs rated */}
           <Card className="rep-card">
-            <div className="rep-card__count">{rep.total}</div>
+            <div className="rep-card__count">{rep.jobs}</div>
             <p className="rep-card__label" style={{ marginTop: 18 }}>
               Jobs Rated
             </p>

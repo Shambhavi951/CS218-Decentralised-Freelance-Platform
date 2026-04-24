@@ -52,8 +52,25 @@ const Services = ({ account, signer, provider, toast }) => {
 
   const loadChain = async () => {
     if (!signer && !provider) return;
+    if (!account) return;
+    if (!CONTRACT_ADDRESS) {
+      toast("Failed to load services: contract address is not configured", "error");
+      return;
+    }
+    
     try {
-      const c   = new ethers.Contract(CONTRACT_ADDRESS, ABI, provider ?? signer);
+      const c = new ethers.Contract(CONTRACT_ADDRESS, ABI, provider ?? signer);
+      
+      // Validate contract methods exist
+      if (typeof c.serviceCount !== 'function') {
+        toast("Failed to load services: contract.serviceCount is not a function", "error");
+        return;
+      }
+      if (typeof c.getService !== 'function') {
+        toast("Failed to load services: contract.getService is not a function", "error");
+        return;
+      }
+      
       const cnt = Number(await c.serviceCount());
       const list = [];
       for (let i = 1; i <= cnt; i++) {

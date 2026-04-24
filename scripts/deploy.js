@@ -1,7 +1,7 @@
 const hre = require("hardhat");
 
 async function main() {
-  const Escrow = await hre.ethers.getContractFactory("FreelanceEscrow");
+  const Escrow = await hre.ethers.getContractFactory("FreelanceEscrowV2");
 
   console.log("Deploying contract...");
 
@@ -11,7 +11,7 @@ async function main() {
 
   const address = await escrow.getAddress();
 
-  console.log("FreelanceEscrow deployed to:", address);
+  console.log("FreelanceEscrowV2 deployed to:", address);
 }
 
 main().catch((error) => {

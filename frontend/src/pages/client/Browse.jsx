@@ -36,11 +36,11 @@ const Browse = ({ account, signer, provider, toast, onHired }) => {
         // Fetch freelancer reputation if not already cached
         if (!reps[s.freelancer]) {
           try {
-            const [avg, total] = await c.getFreelancerReputation(s.freelancer);
-            reps[s.freelancer] = { avg: Number(avg), total: Number(total) };
+            const [avgScoreScaled, totalWeight, totalJobs] = await c.getFreelancerReputation(s.freelancer);
+            reps[s.freelancer] = { avg: Number(avgScoreScaled), weight: Number(totalWeight), jobs: Number(totalJobs) };
           } catch (e) {
             console.warn("Failed to fetch freelancer reputation for", s.freelancer, e);
-            reps[s.freelancer] = { avg: 0, total: 0 };
+            reps[s.freelancer] = { avg: 0, weight: 0, jobs: 0 };
           }
         }
         

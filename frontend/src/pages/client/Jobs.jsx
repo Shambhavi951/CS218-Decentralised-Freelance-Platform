@@ -44,8 +44,6 @@ const ClientJobs = ({ account, signer, provider, toast, onRateNeeded }) => {
           client:          j.client,
           serviceId:       Number(j.serviceId),
           status:          Number(j.status),
-          clientRated:     j.clientRated,
-          freelancerRated: j.freelancerRated,
           amount:          j.amount.toString(),
           deadline:        Number(j.deadline),
           submittedAt:     Number(j.submittedAt),
@@ -178,14 +176,11 @@ const ClientJobs = ({ account, signer, provider, toast, onRateNeeded }) => {
                       Cancel
                     </Btn>
                   )}
-                  {job.status === 2 && !job.clientRated && (
+                  {job.status === 2 && (
                     <Btn sm variant="outline" accent="#38bdf8"
                       onClick={onRateNeeded}>
                       Rate ★
                     </Btn>
-                  )}
-                  {job.status === 2 &&  job.clientRated && (
-                    <span className="cjob-card__rated">✓ Rated</span>
                   )}
                   {job.status === 3 && (
                     <span className="cjob-card__refunded">Refunded</span>
