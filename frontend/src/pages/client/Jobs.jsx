@@ -5,6 +5,7 @@ import "../../styles/pages/client/Jobs.css";
 import { Btn, Card, Chip,InfoBox } from "../../components/ui";
 import Modal                from "../../components/Modal";
 import StatusBadge          from "../../components/StatusBadge";
+import FreelancerProfile    from "../../components/FreelancerProfile";
 
 import { ABI } from "../../constants/abi";
 import { CONTRACT_ADDRESS, NOW } from "../../constants/config";
@@ -15,6 +16,7 @@ const ClientJobs = ({ account, signer, provider, toast, onRateNeeded }) => {
   const [jobs, setJobs] = useState([]);
   const [busy, setBusy] = useState(false);
   const [cidModal, setCidModal] = useState(null); // workCid | null
+  const [profileModal, setProfileModal] = useState(null); // job object | null
 
   /* ── Load ─────────────────────────────────────────────────────────── */
   useEffect(() => {
@@ -163,7 +165,15 @@ const ClientJobs = ({ account, signer, provider, toast, onRateNeeded }) => {
                   </div>
 
                   <div className="cjob-card__grid">
-                    <div>Freelancer <Chip addr={job.freelancer} /></div>
+                    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                      Freelancer <Chip addr={job.freelancer} />
+                      <button 
+                        style={{ background: "none", border: "none", color: "#38bdf8", cursor: "pointer", fontSize: "12px", textDecoration: "underline" }}
+                        onClick={() => setProfileModal(job)}
+                      >
+                        View Profile
+                      </button>
+                    </div>
                     <div>Escrow <b>{fmtEth(job.amount)}</b></div>
                     {job.status === 0 && (
                       <div>
@@ -265,6 +275,23 @@ const ClientJobs = ({ account, signer, provider, toast, onRateNeeded }) => {
         <InfoBox color="#38bdf8" style={{ marginTop: '12px' }}>
           This is the hashed CID of the work submitted to IPFS. The full content can be accessed using an IPFS gateway.
         </InfoBox>
+      </Modal>
+
+      {/* Freelancer Profile Modal */}
+      <Modal
+        open={!!profileModal}
+        onClose={() => setProfileModal(null)}
+        title="Freelancer Profile"
+        accent="#10b981"
+      >
+        {profileModal && (
+          <FreelancerProfile 
+            freelancerId={profileModal.freelancer}
+            context="hired"
+            jobContext={profileModal}
+            onClose={() => setProfileModal(null)}
+          />
+        )}
       </Modal>
     </div>
   );
