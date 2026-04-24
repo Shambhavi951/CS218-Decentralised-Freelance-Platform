@@ -43,6 +43,7 @@ const FreelancerJobs = ({ account, signer, provider, toast }) => {
   const [workDesc, setWorkDesc] = useState("");
   const [score, setScore] = useState(0);
   const [userStake, setUserStake] = useState(0n);
+  const [cidModal, setCidModal] = useState(null); // workCid | null
 
   /* ── Load ─────────────────────────────────────────────────────────── */
   useEffect(() => {
@@ -426,7 +427,14 @@ const FreelancerJobs = ({ account, signer, provider, toast }) => {
                       <span>
                         {job.status === 2 ? "🔒 Work locked on-chain" : "✓ Work submitted"}
                       </span>
-                      <span className="fjob-card__work-cid">{job.workCid.slice(0, 36)}…</span>
+                      <span className="fjob-card__work-cid">
+                        <button 
+                          className="fjob-card__cid-btn"
+                          onClick={() => setCidModal(job.workCid)}
+                        >
+                          {job.workCid.slice(0, 36)}…
+                        </button>
+                      </span>
                     </div>
                   )}
                 </div>
@@ -574,6 +582,21 @@ const FreelancerJobs = ({ account, signer, provider, toast }) => {
             Close
           </Btn>
         </div>
+      </Modal>
+
+      {/* CID Modal */}
+      <Modal
+        open={!!cidModal}
+        onClose={() => setCidModal(null)}
+        title="Work CID Hash"
+        accent="#38bdf8"
+      >
+        <div style={{ wordBreak: 'break-all', fontFamily: 'var(--font-mono)', fontSize: '14px', background: 'var(--bg2)', padding: '12px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)' }}>
+          {cidModal}
+        </div>
+        <InfoBox color="#38bdf8" style={{ marginTop: '12px' }}>
+          This is the hashed CID of the work submitted to IPFS. The full content can be accessed using an IPFS gateway.
+        </InfoBox>
       </Modal>
     </div>
   );

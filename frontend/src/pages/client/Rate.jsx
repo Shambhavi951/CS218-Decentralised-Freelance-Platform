@@ -73,6 +73,7 @@ const Rate = ({ account, signer, provider, toast }) => {
         if (Number(clientTokenId) === 0) continue;
 
         const token = await contract.tokens(Number(clientTokenId));
+        const freelancerToken = await contract.tokens(Number(freelancerTokenId));
         const svc = svcMap[Number(job.serviceId)] ?? {};
 
         const jobData = {
@@ -83,6 +84,7 @@ const Rate = ({ account, signer, provider, toast }) => {
           freelancer: svc.freelancer ?? "",
           reviewee: job.freelancer || svc.freelancer,
           token: token,
+          freelancerToken: freelancerToken,
           expiry: Number(token.expiry)
         };
 
@@ -166,7 +168,20 @@ const Rate = ({ account, signer, provider, toast }) => {
   };
 
   /* ── Finalize Review ──────────────────────────────────────────────── */
-  const handleFinalizeReview = async (jobId) => {
+  const handleFinalizeReview = async (job) => {
+    // Check if freelancer has rated
+    if (!job.freelancerToken.used) {
+      const timeRemaining = job.expiry - Math.floor(Date.now() / 1000);
+      if (timeRemaining > 0) {
+        const days = Math.floor(timeRemaining / (24 * 60 * 60));
+        const hours = Math.floor((timeRemaining % (24 * 60 * 60)) / (60 * 60));
+        const minutes = Math.floor((timeRemaining % (60 * 60)) / 60);
+        const timer = `${days}d ${hours}h ${minutes}m`;
+        toast(`Freelancer has not rated yet. Rating will be revealed after 7 days from work completion if the other person does not submit the rating. Time remaining: ${timer}`, "error");
+        return;
+      }
+    }
+
     setBusy(true);
     try {
       if (!signer) {
@@ -175,7 +190,7 @@ const Rate = ({ account, signer, provider, toast }) => {
         return;
       }
 
-      const tx = await finalizeReview(jobId, signer);
+      const tx = await finalizeReview(job.jobId, signer);
       toast("Finalizing review…");
       await tx.wait();
       toast("Review finalized!", "success");
@@ -187,7 +202,7 @@ const Rate = ({ account, signer, provider, toast }) => {
   };
 
 // Determine which list to display based on the active mode
-const currentJobs = mode === 'commit' ? pendingJobs : expiredJobs;
+const currentJobs = mode === 'submit' ? pendingJobs : expiredJobs;
 
   /* ── Render ───────────────────────────────────────────────────────── */
   return (
@@ -239,7 +254,7 @@ const currentJobs = mode === 'commit' ? pendingJobs : expiredJobs;
                   Submit Rating ★
                 </Btn>
               ) : (
-                <Btn accent="#10b981" onClick={() => handleFinalizeReview(job.jobId)} loading={busy}>
+                <Btn accent="#10b981" onClick={() => handleFinalizeReview(job)} loading={busy}>
                   Finalize Rating
                 </Btn>
               )}

@@ -9,7 +9,7 @@ pragma solidity 0.8.28;
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
 /**
- * @title  FreelanceEscrowV2  (Slither-audited revision)
+ * @title  FreelanceEscrow  (Slither-audited revision)
  * @notice Decentralised escrow for freelance services with commit-reveal
  *         reputation, staking, and weighted scores.
  *
@@ -100,7 +100,7 @@ import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
  *  [G4] Narrowed integer types: uint32 counters, uint88 price,
  *       uint64 timestamps, uint128 amount
  */
-contract FreelanceEscrowV2 is ReentrancyGuard {
+contract FreelanceEscrow is ReentrancyGuard {
 
     // ─────────────────────────────────────────────
     //  CUSTOM ERRORS

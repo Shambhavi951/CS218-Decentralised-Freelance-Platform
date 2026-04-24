@@ -2,7 +2,8 @@ import { useState, useEffect } from "react";
 import { ethers } from "ethers";
 import "../../styles/pages/client/Jobs.css";
 
-import { Btn, Card, Chip } from "../../components/ui";
+import { Btn, Card, Chip,InfoBox } from "../../components/ui";
+import Modal                from "../../components/Modal";
 import StatusBadge          from "../../components/StatusBadge";
 
 import { ABI } from "../../constants/abi";
@@ -13,6 +14,7 @@ import { fmtEth, timeLeft, isZeroCid } from "../../utils/helpers";
 const ClientJobs = ({ account, signer, provider, toast, onRateNeeded }) => {
   const [jobs, setJobs] = useState([]);
   const [busy, setBusy] = useState(false);
+  const [cidModal, setCidModal] = useState(null); // workCid | null
 
   /* ── Load ─────────────────────────────────────────────────────────── */
   useEffect(() => {
@@ -39,6 +41,21 @@ const ClientJobs = ({ account, signer, provider, toast, onRateNeeded }) => {
         const j = await c.getJob(i);
         if (j.client.toLowerCase() !== account.toLowerCase()) continue;
         const svc = svcMap[Number(j.serviceId)] ?? {};
+        
+        // Check if job is rated (for completed jobs)
+        let isRated = false;
+        if (Number(j.status) === 2) { // Done status
+          try {
+            const [clientTokenId] = await c.getJobTokens(i);
+            if (Number(clientTokenId) > 0) {
+              const token = await c.tokens(Number(clientTokenId));
+              isRated = token.applied;
+            }
+          } catch (e) {
+            // Token might not exist yet, ignore
+          }
+        }
+        
         list.push({
           id:              i,
           client:          j.client,
@@ -50,6 +67,7 @@ const ClientJobs = ({ account, signer, provider, toast, onRateNeeded }) => {
           workCid:         j.workCid,
           title:           svc.title      ?? "Untitled",
           freelancer:      svc.freelancer ?? "",
+          isRated:         isRated,
         });
       }
       setJobs(list);
@@ -150,7 +168,27 @@ const ClientJobs = ({ account, signer, provider, toast, onRateNeeded }) => {
                     <div className="cjob-card__work-notice">
                       📦 Work submitted — review and confirm or cancel.
                       <div className="cjob-card__work-cid">
-                        {job.workCid.slice(0, 36)}…
+                        <button 
+                          className="cjob-card__cid-btn"
+                          onClick={() => setCidModal(job.workCid)}
+                        >
+                          {job.workCid.slice(0, 36)}…
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Work completed notice - show CID for completed jobs too */}
+                  {job.status === 2 && hasWork && (
+                    <div className="cjob-card__work-notice cjob-card__work-notice--completed">
+                      ✅ Work completed and locked on-chain.
+                      <div className="cjob-card__work-cid">
+                        <button 
+                          className="cjob-card__cid-btn"
+                          onClick={() => setCidModal(job.workCid)}
+                        >
+                          {job.workCid.slice(0, 36)}…
+                        </button>
                       </div>
                     </div>
                   )}
@@ -177,10 +215,14 @@ const ClientJobs = ({ account, signer, provider, toast, onRateNeeded }) => {
                     </Btn>
                   )}
                   {job.status === 2 && (
-                    <Btn sm variant="outline" accent="#38bdf8"
-                      onClick={onRateNeeded}>
-                      Rate ★
-                    </Btn>
+                    job.isRated ? (
+                      <span className="cjob-card__rated">✓ Rated</span>
+                    ) : (
+                      <Btn sm variant="outline" accent="#38bdf8"
+                        onClick={onRateNeeded}>
+                        Rate ★
+                      </Btn>
+                    )
                   )}
                   {job.status === 3 && (
                     <span className="cjob-card__refunded">Refunded</span>
@@ -191,6 +233,21 @@ const ClientJobs = ({ account, signer, provider, toast, onRateNeeded }) => {
           })}
         </div>
       )}
+
+      {/* CID Modal */}
+      <Modal
+        open={!!cidModal}
+        onClose={() => setCidModal(null)}
+        title="Work CID Hash"
+        accent="#38bdf8"
+      >
+        <div style={{ wordBreak: 'break-all', fontFamily: 'var(--font-mono)', fontSize: '14px', background: 'var(--bg2)', padding: '12px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)' }}>
+          {cidModal}
+        </div>
+        <InfoBox color="#38bdf8" style={{ marginTop: '12px' }}>
+          This is the hashed CID of the work submitted to IPFS. The full content can be accessed using an IPFS gateway.
+        </InfoBox>
+      </Modal>
     </div>
   );
 };
