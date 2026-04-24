@@ -170,6 +170,7 @@ contract FreelanceEscrow is ReentrancyGuard {
         uint64          deadline;    //  8 bytes  │ slot 2
         uint64          submittedAt; //  8 bytes  ┘
         bytes32         workCid;     // 32 bytes ── slot 3
+        bytes32         descriptionCid; // 32 bytes ── slot 4
     }
 
     /**
@@ -417,7 +418,7 @@ contract FreelanceEscrow is ReentrancyGuard {
     //  3. HIRE FREELANCER
     // ─────────────────────────────────────────────
 
-    function hireFreelancer(uint32 serviceId) external payable nonReentrant {
+    function hireFreelancer(uint32 serviceId, bytes32 descriptionCid) external payable nonReentrant {
         Service storage s = services[serviceId];
 
         if (s.freelancer == address(0))       revert InvalidService();
@@ -427,13 +428,14 @@ contract FreelanceEscrow is ReentrancyGuard {
 
         uint32 id = ++jobCount;
         jobs[id] = Job({
-            client:      payable(msg.sender),
-            serviceId:   serviceId,
-            status:      JobStatus.Active,
-            amount:      uint128(msg.value),
-            deadline:    uint64(block.timestamp + 7 days),
-            submittedAt: 0,
-            workCid:     bytes32(0)
+            client:         payable(msg.sender),
+            serviceId:      serviceId,
+            status:         JobStatus.Active,
+            amount:         uint128(msg.value),
+            deadline:       uint64(block.timestamp + 7 days),
+            submittedAt:    0,
+            workCid:        bytes32(0),
+            descriptionCid: descriptionCid
         });
 
         s.status = ServiceStatus.Hired;
