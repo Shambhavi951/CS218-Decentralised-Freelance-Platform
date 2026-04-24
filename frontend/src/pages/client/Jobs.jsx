@@ -44,12 +44,23 @@ const ClientJobs = ({ account, signer, provider, toast, onRateNeeded }) => {
         
         // Check if job is rated (for completed jobs)
         let isRated = false;
+        let workSubmission = null;
         if (Number(j.status) === 2) { // Done status
           try {
             const [clientTokenId] = await c.getJobTokens(i);
             if (Number(clientTokenId) > 0) {
               const token = await c.tokens(Number(clientTokenId));
               isRated = token.applied;
+            }
+
+            // Try to get work submission from backend
+            try {
+              const response = await fetch(`http://localhost:3000/get-work-submission/${i}`);
+              if (response.ok) {
+                workSubmission = await response.json();
+              }
+            } catch (backendError) {
+              console.warn("Could not fetch work submission from backend:", backendError);
             }
           } catch (e) {
             // Token might not exist yet, ignore
@@ -68,6 +79,7 @@ const ClientJobs = ({ account, signer, provider, toast, onRateNeeded }) => {
           title:           svc.title      ?? "Untitled",
           freelancer:      svc.freelancer ?? "",
           isRated:         isRated,
+          workSubmission:  workSubmission,
         });
       }
       setJobs(list);
@@ -178,7 +190,7 @@ const ClientJobs = ({ account, signer, provider, toast, onRateNeeded }) => {
                     </div>
                   )}
 
-                  {/* Work completed notice - show CID for completed jobs too */}
+                  {/* Work completed notice - show CID and work description */}
                   {job.status === 2 && hasWork && (
                     <div className="cjob-card__work-notice cjob-card__work-notice--completed">
                       ✅ Work completed and locked on-chain.
@@ -190,6 +202,12 @@ const ClientJobs = ({ account, signer, provider, toast, onRateNeeded }) => {
                           {job.workCid.slice(0, 36)}…
                         </button>
                       </div>
+                      {job.workSubmission && (
+                        <div className="cjob-card__work-description">
+                          <strong>Work Description:</strong>
+                          <p>{job.workSubmission.workDescription}</p>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>

@@ -75,6 +75,27 @@
   color: var(--sky);
 }
 
+.cjob-card__work-description {
+  margin-top: 8px;
+  padding: 8px 12px;
+  background: var(--bg2);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+}
+
+.cjob-card__work-description strong {
+  color: var(--text1);
+  display: block;
+  margin-bottom: 4px;
+}
+
+.cjob-card__work-description p {
+  color: var(--text2);
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
 /* Actions */
 .cjob-card__actions {
   display: flex;

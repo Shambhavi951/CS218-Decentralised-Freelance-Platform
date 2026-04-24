@@ -24,7 +24,7 @@ import StatusBadge from "../../components/StatusBadge";
 
 import { ABI } from "../../constants/abi";
 import { CONTRACT_ADDRESS, NOW, ZERO_CID } from "../../constants/config";
-import { computeCid } from "../../utils/ipfs";
+import { computeCid, cidToBytes32 } from "../../utils/ipfs";
 import { fmtEth, timeLeft, isZeroCid } from "../../utils/helpers";
 
 const MIN_STAKE = ethers.parseEther("0.05");
@@ -90,6 +90,18 @@ const FreelancerJobs = ({ account, signer, provider, toast }) => {
             }
           }
           
+          let realCID = null;
+          if (j.workCid && j.workCid !== ZERO_CID) {
+            try {
+              const res = await fetch(`http://localhost:3000/get-cid/${j.workCid}`);
+              if (res.ok) {
+                const data = await res.json();
+                realCID = data.cid;
+              }
+            } catch (e) {
+              console.warn("CID not found", e);
+            }
+          }
           list.push({
             id: i,
             client: j.client,
@@ -99,6 +111,7 @@ const FreelancerJobs = ({ account, signer, provider, toast }) => {
             deadline: Number(j.deadline),
             submittedAt: Number(j.submittedAt),
             workCid: j.workCid,
+            realCID: realCID
           });
         }
         setJobs(list);
@@ -150,10 +163,17 @@ const FreelancerJobs = ({ account, signer, provider, toast }) => {
 
   /* ── Submit work ──────────────────────────────────────────────────── */
   const handleSubmit = async () => {
-    if (!workDesc.trim()) { toast("Describe your work first", "error"); return; }
+    if (!workDesc.trim()) {
+      toast("Describe your work first", "error");
+      return;
+    }
+
     setBusy(true);
     try {
-      const cid = await computeCid(workDesc);
+      // Compute CID from work description
+      const originalCid = await computeCid(workDesc);
+      const cidHash = cidToBytes32(originalCid);
+
       const activeSigner = signer ?? provider?.getSigner();
       if (!activeSigner) {
         toast("Connect your wallet first", "error");
@@ -161,16 +181,48 @@ const FreelancerJobs = ({ account, signer, provider, toast }) => {
         return;
       }
 
-      const c  = new ethers.Contract(CONTRACT_ADDRESS, ABI, activeSigner);
-      const tx = await c.submitWork(submitJob, cid);
+      // Submit to blockchain first
+      const c = new ethers.Contract(CONTRACT_ADDRESS, ABI, activeSigner);
+      const tx = await c.submitWork(submitJob, cidHash);
       toast("Submitting on-chain…");
       await tx.wait();
+
+      // Then store in backend
+      try {
+        const backendResponse = await fetch("http://localhost:3000/store-work-submission", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            jobId: submitJob,
+            freelancer: account,
+            cidHash: cidHash,
+            originalCid: originalCid,
+            workDescription: workDesc.trim()
+          })
+        });
+
+        const backendData = await backendResponse.json();
+
+        if (!backendResponse.ok) {
+        //   console.warn("Backend storage failed:", backendData.error);
+        throw new Error(backendData.error || "Backend failed");
+          // Don't fail the whole operation, just log the warning
+        } else {
+          console.log("Work stored in backend:", backendData);
+        }
+      } catch (backendError) {
+        console.warn("Backend communication failed:", backendError);
+        // Continue with success even if backend fails
+      }
+
       toast("Work submitted — hash locked on-chain.", "success");
       await loadChain();
       setSubmitJob(null);
       setWorkDesc("");
+
     } catch (e) {
-      toast(e.reason ?? e.message ?? "Failed", "error");
+      console.error("Work submission error:", e);
+      toast(e.reason ?? e.message ?? "Failed to submit work", "error");
     }
     setBusy(false);
   };
@@ -435,6 +487,11 @@ const FreelancerJobs = ({ account, signer, provider, toast }) => {
                           {job.workCid.slice(0, 36)}…
                         </button>
                       </span>
+                      {job.status === 2 && (
+                        <div className="fjob-card__backend-note">
+                          📄 Work description stored securely in backend
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
