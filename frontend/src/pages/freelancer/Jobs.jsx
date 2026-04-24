@@ -19,7 +19,7 @@ import { ethers } from "ethers";
 import "../../styles/pages/freelancer/Jobs.css";
 
 import { Btn, Card, Textarea, InfoBox, Chip, Stars, Tabs } from "../../components/ui";
-import Modal       from "../../components/Modal";
+import Modal from "../../components/Modal";
 import StatusBadge from "../../components/StatusBadge";
 
 import { ABI } from "../../constants/abi";
@@ -56,13 +56,13 @@ const FreelancerJobs = ({ account, signer, provider, toast }) => {
     if (!signer && !provider) return;
     try {
       const c = new ethers.Contract(CONTRACT_ADDRESS, ABI, provider ?? signer);
-      
+
       // Debug: Log contract instance details
       console.log("Contract Address:", CONTRACT_ADDRESS);
       console.log("Provider:", provider ? "Connected" : "Not connected");
       console.log("Signer:", signer ? "Connected" : "Not connected");
       console.log("Contract instance methods:", Object.keys(c).filter(k => typeof c[k] === 'function').slice(0, 20));
-      
+
       // Check if stakes method exists
       if (typeof c.stakes !== 'function') {
         console.error("stakes is not a function. Available methods:", Object.keys(c).filter(k => k.includes('stake')));
@@ -86,7 +86,7 @@ const FreelancerJobs = ({ account, signer, provider, toast }) => {
           const j = await c.getJob(i);
           const sv = await c.getService(Number(j.serviceId));
           if (sv.freelancer.toLowerCase() !== account.toLowerCase()) continue;
-          
+
           // Fetch client reputation if not already cached
           if (!reps[j.client]) {
             try {
@@ -97,7 +97,7 @@ const FreelancerJobs = ({ account, signer, provider, toast }) => {
               reps[j.client] = { avg: 0, weight: 0, jobs: 0 };
             }
           }
-          
+
           let realCID = null;
           let workSubmission = null;
           if (j.workCid && j.workCid !== ZERO_CID) {
@@ -144,7 +144,7 @@ const FreelancerJobs = ({ account, signer, provider, toast }) => {
         for (let i = 1; i <= cnt; i++) {
           const j = await c.getJob(i);
           const sv = await c.getService(Number(j.serviceId));
-          
+
           // Only show jobs where this freelancer is involved and job is completed
           if (sv.freelancer.toLowerCase() !== account.toLowerCase() || Number(j.status) !== 2) {
             continue;
@@ -234,7 +234,9 @@ const FreelancerJobs = ({ account, signer, provider, toast }) => {
         const backendData = await backendResponse.json();
 
         if (!backendResponse.ok) {
-          throw new Error(backendData.error || "Backend failed");
+        
+        throw new Error(backendData.error || "Backend failed");
+        
         } else {
           console.log("Work stored in backend:", backendData);
         }
@@ -281,7 +283,7 @@ const FreelancerJobs = ({ account, signer, provider, toast }) => {
         return;
       }
 
-      const c  = new ethers.Contract(CONTRACT_ADDRESS, ABI, activeSigner);
+      const c = new ethers.Contract(CONTRACT_ADDRESS, ABI, activeSigner);
       const tx = await c.autoRelease(jobId);
       toast("Releasing payment…");
       await tx.wait();
@@ -304,7 +306,7 @@ const FreelancerJobs = ({ account, signer, provider, toast }) => {
         return;
       }
 
-      const c  = new ethers.Contract(CONTRACT_ADDRESS, ABI, activeSigner);
+      const c = new ethers.Contract(CONTRACT_ADDRESS, ABI, activeSigner);
       const tx = await c.clearWork(jobId);
       toast("Clearing work CID…");
       await tx.wait();
@@ -341,9 +343,9 @@ const FreelancerJobs = ({ account, signer, provider, toast }) => {
 
   /* ── Commit Rating ────────────────────────────────────────────────── */
   const handleSubmitFeedback = async () => {
-    if (!score) { 
-      toast("Select a star rating", "error"); 
-      return; 
+    if (!score) {
+      toast("Select a star rating", "error");
+      return;
     }
     if (userStake < MIN_STAKE) {
       toast("Insufficient stake. Deposit at least 0.05 ETH", "error");
@@ -457,51 +459,51 @@ const FreelancerJobs = ({ account, signer, provider, toast }) => {
         <div className="fjobs-list">
           {(mode === 'jobs' ? jobs : (rateMode === 'submit' ? rateJobs : revealJobs)).map((job) => {
             if (mode === 'jobs') {
-            const hasWork = !isZeroCid(job.workCid);
-            const accentColor = ["#4ade80","#fb923c","#38bdf8","#f87171"][job.status];
+              const hasWork = !isZeroCid(job.workCid);
+              const accentColor = ["#4ade80", "#fb923c", "#38bdf8", "#f87171"][job.status];
 
-            return (
-              <Card key={job.id} className="fjob-card" style={{ borderLeftColor: accentColor }}>
-                {/* Body */}
-                <div className="fjob-card__body">
-                  <div className="fjob-card__meta">
-                    <span className="fjob-card__id">Job #{job.id}</span>
-                    <StatusBadge kind="job" status={job.status} />
-                    <span className="fjob-card__svc-id">Service #{job.serviceId}</span>
-                  </div>
-
-                  <div className="fjob-card__grid">
-                    <div>Client <Chip addr={job.client} /></div>
-                    <div>Escrow <b>{fmtEth(job.amount)}</b></div>
-                    {job.status === 0 && (
-                      <div>
-                        Deadline{" "}
-                        <b className={NOW > job.deadline ? "fjob-card__deadline--expired" : ""}>
-                          {timeLeft(job.deadline)}
-                        </b>
-                      </div>
-                    )}
-                    {job.status === 1 && (
-                      <div>
-                        Auto-release{" "}
-                        <b className="fjob-card__autorelease-time">
-                          {timeLeft(job.submittedAt + 3 * 86400)}
-                        </b>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Client Reputation */}
-                  {clientReps[job.client] && (
-                    <div className="fjob-card__client-rep">
-                      <button 
-                        className="fjob-card__client-rep-btn"
-                        onClick={() => setClientRepModal(job.client)}
-                      >
-                        Client Reputation {clientReps[job.client].jobs > 0 ? `(${clientReps[job.client].jobs} rating${clientReps[job.client].jobs !== 1 ? 's' : ''})` : '(No ratings yet)'}
-                      </button>
+              return (
+                <Card key={job.id} className="fjob-card" style={{ borderLeftColor: accentColor }}>
+                  {/* Body */}
+                  <div className="fjob-card__body">
+                    <div className="fjob-card__meta">
+                      <span className="fjob-card__id">Job #{job.id}</span>
+                      <StatusBadge kind="job" status={job.status} />
+                      <span className="fjob-card__svc-id">Service #{job.serviceId}</span>
                     </div>
-                  )}
+
+                    <div className="fjob-card__grid">
+                      <div>Client <Chip addr={job.client} /></div>
+                      <div>Escrow <b>{fmtEth(job.amount)}</b></div>
+                      {job.status === 0 && (
+                        <div>
+                          Deadline{" "}
+                          <b className={NOW > job.deadline ? "fjob-card__deadline--expired" : ""}>
+                            {timeLeft(job.deadline)}
+                          </b>
+                        </div>
+                      )}
+                      {job.status === 1 && (
+                        <div>
+                          Auto-release{" "}
+                          <b className="fjob-card__autorelease-time">
+                            {timeLeft(job.submittedAt + 3 * 86400)}
+                          </b>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Client Reputation */}
+                    {clientReps[job.client] && (
+                      <div className="fjob-card__client-rep">
+                        <button
+                          className="fjob-card__client-rep-btn"
+                          onClick={() => setClientRepModal(job.client)}
+                        >
+                          Client Reputation {clientReps[job.client].jobs > 0 ? `(${clientReps[job.client].jobs} rating${clientReps[job.client].jobs !== 1 ? 's' : ''})` : '(No ratings yet)'}
+                        </button>
+                      </div>
+                    )}
 
                   {/* Work status */}
                   {hasWork && (
@@ -526,28 +528,28 @@ const FreelancerJobs = ({ account, signer, provider, toast }) => {
                   )}
                 </div>
 
-                {/* Actions */}
-                <div className="fjob-card__actions">
-                  {job.status === 0 && (
-                    <Btn sm accent="#f59e0b" onClick={() => setSubmitJob(job.id)}>
-                      Submit Work
-                    </Btn>
-                  )}
-                  {job.status === 1 && (
-                    <Btn sm variant="outline" accent="#38bdf8"
-                      onClick={() => handleAutoRelease(job.id, job.submittedAt)} loading={busy}>
-                      Auto-Release
-                    </Btn>
-                  )}
-                  {job.status === 3 && hasWork && (
-                    <Btn sm variant="danger"
-                      onClick={() => handleClearWork(job.id)} loading={busy}>
-                      Clear Work
-                    </Btn>
-                  )}
-                </div>
-              </Card>
-            );
+                  {/* Actions */}
+                  <div className="fjob-card__actions">
+                    {job.status === 0 && (
+                      <Btn sm accent="#f59e0b" onClick={() => setSubmitJob(job.id)}>
+                        Submit Work
+                      </Btn>
+                    )}
+                    {job.status === 1 && (
+                      <Btn sm variant="outline" accent="#38bdf8"
+                        onClick={() => handleAutoRelease(job.id, job.submittedAt)} loading={busy}>
+                        Auto-Release
+                      </Btn>
+                    )}
+                    {job.status === 3 && hasWork && (
+                      <Btn sm variant="danger"
+                        onClick={() => handleClearWork(job.id)} loading={busy}>
+                        Clear Work
+                      </Btn>
+                    )}
+                  </div>
+                </Card>
+              );
             } else {
               // Rate mode
               return (

@@ -2,10 +2,10 @@ import { useState, useEffect } from "react";
 import { ethers } from "ethers";
 import "../../styles/pages/client/Jobs.css";
 
-import { Btn, Card, Chip,InfoBox } from "../../components/ui";
-import Modal                from "../../components/Modal";
-import StatusBadge          from "../../components/StatusBadge";
-import FreelancerProfile    from "../../components/FreelancerProfile";
+import { Btn, Card, Chip, InfoBox } from "../../components/ui";
+import Modal from "../../components/Modal";
+import StatusBadge from "../../components/StatusBadge";
+import FreelancerProfile from "../../components/FreelancerProfile";
 
 import { ABI } from "../../constants/abi";
 import { CONTRACT_ADDRESS, NOW } from "../../constants/config";
@@ -26,7 +26,7 @@ const ClientJobs = ({ account, signer, provider, toast, onRateNeeded }) => {
   const loadChain = async () => {
     if (!signer && !provider) return;
     try {
-      const c      = new ethers.Contract(CONTRACT_ADDRESS, ABI, provider ?? signer);
+      const c = new ethers.Contract(CONTRACT_ADDRESS, ABI, provider ?? signer);
       const svcCnt = Number(await c.serviceCount());
       const jobCnt = Number(await c.jobCount());
 
@@ -43,7 +43,7 @@ const ClientJobs = ({ account, signer, provider, toast, onRateNeeded }) => {
         const j = await c.getJob(i);
         if (j.client.toLowerCase() !== account.toLowerCase()) continue;
         const svc = svcMap[Number(j.serviceId)] ?? {};
-        
+
         // Check if job is rated (for completed jobs)
         let isRated = false;
         let workSubmission = null;
@@ -72,20 +72,20 @@ const ClientJobs = ({ account, signer, provider, toast, onRateNeeded }) => {
             // Token might not exist yet, ignore
           }
         }
-        
+
         list.push({
-          id:              i,
-          client:          j.client,
-          serviceId:       Number(j.serviceId),
-          status:          Number(j.status),
-          amount:          j.amount.toString(),
-          deadline:        Number(j.deadline),
-          submittedAt:     Number(j.submittedAt),
-          workCid:         j.workCid,
-          title:           svc.title      ?? "Untitled",
-          freelancer:      svc.freelancer ?? "",
-          isRated:         isRated,
-          workSubmission:  workSubmission,
+          id: i,
+          client: j.client,
+          serviceId: Number(j.serviceId),
+          status: Number(j.status),
+          amount: j.amount.toString(),
+          deadline: Number(j.deadline),
+          submittedAt: Number(j.submittedAt),
+          workCid: j.workCid,
+          title: svc.title ?? "Untitled",
+          freelancer: svc.freelancer ?? "",
+          isRated: isRated,
+          workSubmission: workSubmission,
         });
       }
       setJobs(list);
@@ -105,7 +105,7 @@ const ClientJobs = ({ account, signer, provider, toast, onRateNeeded }) => {
         return;
       }
 
-      const c  = new ethers.Contract(CONTRACT_ADDRESS, ABI, activeSigner);
+      const c = new ethers.Contract(CONTRACT_ADDRESS, ABI, activeSigner);
       const tx = await c.confirmCompletion(jobId);
       toast("Confirming…");
       await tx.wait();
@@ -129,7 +129,7 @@ const ClientJobs = ({ account, signer, provider, toast, onRateNeeded }) => {
         return;
       }
 
-      const c  = new ethers.Contract(CONTRACT_ADDRESS, ABI, activeSigner);
+      const c = new ethers.Contract(CONTRACT_ADDRESS, ABI, activeSigner);
       const tx = await c.cancelJob(jobId);
       toast("Cancelling…");
       await tx.wait();
@@ -155,8 +155,8 @@ const ClientJobs = ({ account, signer, provider, toast, onRateNeeded }) => {
       ) : (
         <div className="cjobs-list">
           {jobs.map((job) => {
-            const hasWork     = !isZeroCid(job.workCid);
-            const accentColor = ["#4ade80","#fb923c","#38bdf8","#f87171"][job.status];
+            const hasWork = !isZeroCid(job.workCid);
+            const accentColor = ["#4ade80", "#fb923c", "#38bdf8", "#f87171"][job.status];
 
             return (
               <Card key={job.id} className="cjob-card" style={{ borderLeftColor: accentColor }}>
@@ -171,7 +171,7 @@ const ClientJobs = ({ account, signer, provider, toast, onRateNeeded }) => {
                   <div className="cjob-card__grid">
                     <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                       Freelancer <Chip addr={job.freelancer} />
-                      <button 
+                      <button
                         style={{ background: "none", border: "none", color: "#38bdf8", cursor: "pointer", fontSize: "12px", textDecoration: "underline" }}
                         onClick={() => setProfileModal(job)}
                       >
@@ -194,7 +194,7 @@ const ClientJobs = ({ account, signer, provider, toast, onRateNeeded }) => {
                     <div className="cjob-card__work-notice">
                       📦 Work submitted — review and confirm or cancel.
                       <div className="cjob-card__work-cid">
-                        <button 
+                        <button
                           className="cjob-card__cid-btn"
                           onClick={() => setCidModal(job)}
                         >
@@ -209,7 +209,7 @@ const ClientJobs = ({ account, signer, provider, toast, onRateNeeded }) => {
                     <div className="cjob-card__work-notice cjob-card__work-notice--completed">
                       ✅ Work completed and locked on-chain.
                       <div className="cjob-card__work-cid">
-                        <button 
+                        <button
                           className="cjob-card__cid-btn"
                           onClick={() => setCidModal(job)}
                         >
@@ -363,7 +363,7 @@ const ClientJobs = ({ account, signer, provider, toast, onRateNeeded }) => {
         accent="#10b981"
       >
         {profileModal && (
-          <FreelancerProfile 
+          <FreelancerProfile
             freelancerId={profileModal.freelancer}
             context="hired"
             jobContext={profileModal}
