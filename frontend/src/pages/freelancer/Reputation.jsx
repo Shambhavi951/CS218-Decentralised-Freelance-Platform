@@ -3,7 +3,7 @@ import { ethers } from "ethers";
 import "../../styles/pages/freelancer/Reputation.css";
 
 import { Card, Stars } from "../../components/ui";
-import { ABI } from "../../constants/abi";
+import ABI from "../../constants/abi";
 import { CONTRACT_ADDRESS } from "../../constants/config";
 
 const Reputation = ({ account, signer, provider, toast }) => {

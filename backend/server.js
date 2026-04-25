@@ -149,6 +149,30 @@ app.patch("/update-work-status/:jobId", async (req, res) => {
 });
 
 /**
+ * Delete work submission by jobId
+ */
+app.delete("/delete-work-submission/:jobId", async (req, res) => {
+  try {
+    const jobId = parseInt(req.params.jobId);
+
+    const result = await WorkSubmission.findOneAndDelete({ jobId });
+
+    if (!result) {
+      return res.status(404).json({ error: "Work submission not found" });
+    }
+
+    res.json({
+      message: "Work submission deleted successfully",
+      data: result
+    });
+
+  } catch (err) {
+    console.error("Error deleting work submission:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+/**
  * Get all work submissions for a freelancer
  */
 app.get("/freelancer-work/:freelancer", async (req, res) => {

@@ -13,7 +13,7 @@ import {
   finalizeReview,
   depositStake,
 } from "../../utils/contractHelpers";
-import { ABI } from "../../constants/abi";
+import ABI from "../../constants/abi";
 
 const MIN_STAKE_WEI = ethers.parseEther("0.05");
 

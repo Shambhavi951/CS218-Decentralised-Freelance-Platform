@@ -1,5 +1,5 @@
 import { ethers } from "ethers";
-import { ABI } from "../constants/abi";
+import ABI from "../constants/abi";
 import { CONTRACT_ADDRESS, MIN_STAKE } from "../constants/config";
 
 /**

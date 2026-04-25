@@ -2,13 +2,13 @@ import { useState, useEffect } from "react";
 import { ethers } from "ethers";
 import "../../styles/pages/client/Browse.css";
 
-import { Btn, Card, InfoBox, Chip, Stars } from "../../components/ui";
+import { Btn, Card, InfoBox, Chip, Stars, Textarea } from "../../components/ui";
 import Modal from "../../components/Modal";
 import FreelancerProfile from "../../components/FreelancerProfile";
 
-import { ABI } from "../../constants/abi";
+import ABI from "../../constants/abi";
 import { CONTRACT_ADDRESS } from "../../constants/config";
-import { loadMeta } from "../../utils/ipfs";
+import { loadMeta, computeCid, saveMeta } from "../../utils/ipfs";
 import { fmtEth } from "../../utils/helpers";
 
 const Browse = ({ account, signer, provider, toast, onHired }) => {
@@ -16,6 +16,7 @@ const Browse = ({ account, signer, provider, toast, onHired }) => {
   const [hireTarget, setHireTarget] = useState(null);
   const [freelancerReps, setFreelancerReps] = useState({}); // freelancer address -> {avg, total}
   const [profileModal, setProfileModal] = useState(null); // svc object | null
+  const [jobDescription, setJobDescription] = useState("");
   const [busy, setBusy] = useState(false);
 
   /* ── Load ─────────────────────────────────────────────────────────── */
@@ -70,6 +71,11 @@ const Browse = ({ account, signer, provider, toast, onHired }) => {
       toast("Cannot hire yourself", "error");
       return;
     }
+    if (!jobDescription || jobDescription.trim().length < 20) {
+      toast("Job description must be at least 20 characters long", "error");
+      return;
+    }
+
     setBusy(true);
     try {
       const activeSigner = signer ?? provider?.getSigner();
@@ -79,9 +85,13 @@ const Browse = ({ account, signer, provider, toast, onHired }) => {
         return;
       }
 
+      const descText = jobDescription.trim();
+      const descriptionCID = await computeCid(descText);
+      saveMeta(descriptionCID, { jobDescription: descText });
+
       const c = new ethers.Contract(CONTRACT_ADDRESS, ABI, activeSigner);
       const deadlineTimestamp = Math.floor(Date.now() / 1000) + (hireTarget.deadline * 86400);
-      const tx = await c.hireFreelancer(hireTarget.id, deadlineTimestamp, {
+      const tx = await c.hireFreelancer(hireTarget.id, deadlineTimestamp, descriptionCID, {
         value: hireTarget.priceWei,
       });
       toast("Payment locked in escrow…");
@@ -90,6 +100,7 @@ const Browse = ({ account, signer, provider, toast, onHired }) => {
       await loadChain();
       onHired?.();
       setHireTarget(null);
+      setJobDescription("");
     } catch (e) {
       toast(e.reason ?? e.message ?? "Failed", "error");
     }
@@ -156,7 +167,7 @@ const Browse = ({ account, signer, provider, toast, onHired }) => {
       {/* Hire confirmation modal */}
       <Modal
         open={!!hireTarget}
-        onClose={() => setHireTarget(null)}
+        onClose={() => { setHireTarget(null); setJobDescription(""); }}
         title="Confirm Hire"
         accent="#38bdf8"
       >
@@ -175,13 +186,23 @@ const Browse = ({ account, signer, provider, toast, onHired }) => {
               </div>
             </div>
 
-            <InfoBox color="#38bdf8">
+            <div style={{ marginTop: "1rem" }}>
+              <Textarea
+                label="Job Description"
+                placeholder="Describe your project requirements... (min 20 characters)"
+                value={jobDescription}
+                onChange={(v) => setJobDescription(v)}
+                rows={4}
+              />
+            </div>
+
+            <InfoBox color="#38bdf8" style={{ marginTop: "1rem" }}>
               ⛓ {fmtEth(hireTarget.priceWei)} will be locked in the smart contract
               escrow until you confirm the work is complete.
             </InfoBox>
 
             <div className="modal__footer">
-              <Btn variant="ghost" onClick={() => setHireTarget(null)}>
+              <Btn variant="ghost" onClick={() => { setHireTarget(null); setJobDescription(""); }}>
                 Cancel
               </Btn>
               <Btn onClick={handleHire} loading={busy} accent="#38bdf8">

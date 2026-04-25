@@ -22,9 +22,9 @@ import { Btn, Card, Textarea, InfoBox, Chip, Stars, Tabs } from "../../component
 import Modal from "../../components/Modal";
 import StatusBadge from "../../components/StatusBadge";
 
-import { ABI } from "../../constants/abi";
+import ABI from "../../constants/abi";
 import { CONTRACT_ADDRESS, NOW, ZERO_CID } from "../../constants/config";
-import { computeCid, cidToBytes32, uploadFileToIPFS } from "../../utils/ipfs";
+import { computeCid, cidToBytes32, uploadFileToIPFS, loadMeta } from "../../utils/ipfs";
 import { fmtEth, timeLeft, isZeroCid } from "../../utils/helpers";
 
 const MIN_STAKE = ethers.parseEther("0.05");
@@ -121,6 +121,8 @@ const FreelancerJobs = ({ account, signer, provider, toast }) => {
               console.warn("CID not found", e);
             }
           }
+          const jobDescMeta = loadMeta(j.jobDescription) ?? {};
+
           list.push({
             id: i,
             client: j.client,
@@ -130,6 +132,8 @@ const FreelancerJobs = ({ account, signer, provider, toast }) => {
             deadline: Number(j.deadline),
             submittedAt: Number(j.submittedAt),
             workCid: j.workCid,
+            jobDescriptionCID: j.jobDescription,
+            jobDescription: jobDescMeta.jobDescription ?? "No description provided.",
             realCID: realCID,
             workSubmission: workSubmission
           });
@@ -234,9 +238,7 @@ const FreelancerJobs = ({ account, signer, provider, toast }) => {
         const backendData = await backendResponse.json();
 
         if (!backendResponse.ok) {
-        
-        throw new Error(backendData.error || "Backend failed");
-        
+          throw new Error(backendData.error || "Backend failed");
         } else {
           console.log("Work stored in backend:", backendData);
         }
@@ -310,7 +312,21 @@ const FreelancerJobs = ({ account, signer, provider, toast }) => {
       const tx = await c.clearWork(jobId);
       toast("Clearing work CID…");
       await tx.wait();
-      toast("Cleared. Unpin from IPFS now.", "success");
+      
+      // Delete work submission from backend database
+      try {
+        const deleteResponse = await fetch(`http://localhost:3000/delete-work-submission/${jobId}`, {
+          method: "DELETE"
+        });
+        if (!deleteResponse.ok) {
+          console.warn("Failed to delete work submission from backend:", await deleteResponse.json());
+        }
+      } catch (backendError) {
+        console.warn("Backend deletion error:", backendError.message);
+        // Continue anyway - work is cleared on-chain
+      }
+
+      toast("Cleared. Work submission deleted.", "success");
       await loadChain();
     } catch (e) {
       toast(e.reason ?? e.message ?? "Failed", "error");
@@ -470,6 +486,13 @@ const FreelancerJobs = ({ account, signer, provider, toast }) => {
                       <span className="fjob-card__id">Job #{job.id}</span>
                       <StatusBadge kind="job" status={job.status} />
                       <span className="fjob-card__svc-id">Service #{job.serviceId}</span>
+                    </div>
+
+                    <div style={{ margin: "12px 0", padding: "12px", background: "var(--bg2)", borderRadius: "var(--radius-sm)", border: "1px solid var(--border)" }}>
+                      <div style={{ fontSize: "12px", color: "var(--text2)", marginBottom: "4px", fontWeight: "bold", textTransform: "uppercase", letterSpacing: "0.5px" }}>Job Description</div>
+                      <div style={{ fontSize: "14px", color: "var(--text)", whiteSpace: "pre-wrap" }}>
+                        {job.jobDescription}
+                      </div>
                     </div>
 
                     <div className="fjob-card__grid">

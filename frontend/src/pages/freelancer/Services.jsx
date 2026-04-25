@@ -35,7 +35,7 @@ import { Btn, Card, Input, Textarea, InfoBox } from "../../components/ui";
 import Modal      from "../../components/Modal";
 import StatusBadge from "../../components/StatusBadge";
 
-import { ABI } from "../../constants/abi";
+import ABI from "../../constants/abi";
 import { CONTRACT_ADDRESS } from "../../constants/config";
 import { computeCid, saveMeta, loadMeta } from "../../utils/ipfs";
 

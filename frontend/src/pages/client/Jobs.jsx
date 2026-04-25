@@ -7,7 +7,7 @@ import Modal from "../../components/Modal";
 import StatusBadge from "../../components/StatusBadge";
 import FreelancerProfile from "../../components/FreelancerProfile";
 
-import { ABI } from "../../constants/abi";
+import ABI from "../../constants/abi";
 import { CONTRACT_ADDRESS, NOW } from "../../constants/config";
 import { loadMeta } from "../../utils/ipfs";
 import { fmtEth, timeLeft, isZeroCid } from "../../utils/helpers";
@@ -73,6 +73,8 @@ const ClientJobs = ({ account, signer, provider, toast, onRateNeeded }) => {
           }
         }
 
+        const jobDescMeta = loadMeta(j.jobDescription) ?? {};
+
         list.push({
           id: i,
           client: j.client,
@@ -82,6 +84,8 @@ const ClientJobs = ({ account, signer, provider, toast, onRateNeeded }) => {
           deadline: Number(j.deadline),
           submittedAt: Number(j.submittedAt),
           workCid: j.workCid,
+          jobDescriptionCID: j.jobDescription,
+          jobDescription: jobDescMeta.jobDescription ?? "No description provided.",
           title: svc.title ?? "Untitled",
           freelancer: svc.freelancer ?? "",
           isRated: isRated,
@@ -166,6 +170,13 @@ const ClientJobs = ({ account, signer, provider, toast, onRateNeeded }) => {
                     <span className="cjob-card__id">Job #{job.id}</span>
                     <StatusBadge kind="job" status={job.status} />
                     <span className="cjob-card__title">{job.title}</span>
+                  </div>
+
+                  <div style={{ margin: "12px 0", padding: "12px", background: "var(--bg2)", borderRadius: "var(--radius-sm)", border: "1px solid var(--border)" }}>
+                    <div style={{ fontSize: "12px", color: "var(--text2)", marginBottom: "4px", fontWeight: "bold", textTransform: "uppercase", letterSpacing: "0.5px" }}>Job Description</div>
+                    <div style={{ fontSize: "14px", color: "var(--text)", whiteSpace: "pre-wrap" }}>
+                      {job.jobDescription}
+                    </div>
                   </div>
 
                   <div className="cjob-card__grid">
@@ -275,64 +286,79 @@ const ClientJobs = ({ account, signer, provider, toast, onRateNeeded }) => {
       >
         {cidModal && (
           <div>
-            {/* On-chain hash (for verification) */}
-            <div style={{ marginBottom: '1.5rem' }}>
-              <h4 style={{ marginBottom: '0.5rem', fontSize: '0.9rem', fontWeight: 'bold', color: 'var(--text-secondary)' }}>
-                On-Chain Hash (Verification):
-              </h4>
-              <div style={{ wordBreak: 'break-all', fontFamily: 'var(--font-mono)', fontSize: '12px', background: 'var(--bg2)', padding: '12px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)' }}>
-                {cidModal.workCid}
+            {/* Check if work has been cleared */}
+            {isZeroCid(cidModal.workCid) ? (
+              <div style={{ padding: '20px', textAlign: 'center', background: 'var(--bg2)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)' }}>
+                <p style={{ color: 'var(--text-secondary)', fontSize: '0.95rem' }}>
+                  This work has been cleared by the freelancer.
+                </p>
               </div>
-              <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginTop: '0.5rem' }}>
-                This hash is permanently stored on-chain as proof of work submission.
-              </p>
-            </div>
-
-            {/* Original IPFS CID (if available from backend) */}
-            {cidModal.workSubmission?.originalCid && (
-              <div style={{ marginBottom: '1.5rem' }}>
-                <h4 style={{ marginBottom: '0.5rem', fontSize: '0.9rem', fontWeight: 'bold', color: 'var(--text-secondary)' }}>
-                  IPFS Content Hash:
-                </h4>
-                <div style={{ wordBreak: 'break-all', fontFamily: 'var(--font-mono)', fontSize: '12px', background: 'var(--bg2)', padding: '12px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)' }}>
-                  {cidModal.workSubmission.originalCid}
+            ) : (
+              <>
+                {/* On-chain hash (for verification) */}
+                <div style={{ marginBottom: '1.5rem' }}>
+                  <h4 style={{ marginBottom: '0.5rem', fontSize: '0.9rem', fontWeight: 'bold', color: 'var(--text-secondary)' }}>
+                    On-Chain Hash (Verification):
+                  </h4>
+                  <div style={{ wordBreak: 'break-all', fontFamily: 'var(--font-mono)', fontSize: '12px', background: 'var(--bg2)', padding: '12px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)' }}>
+                    {cidModal.workCid}
+                  </div>
+                  <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginTop: '0.5rem' }}>
+                    This hash is permanently stored on-chain as proof of work submission.
+                  </p>
                 </div>
-                <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginTop: '0.5rem' }}>
-                  ipfs://{cidModal.workSubmission.originalCid}
-                </p>
-                <a 
-                  href={`https://gateway.pinata.cloud/ipfs/${cidModal.workSubmission.originalCid}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  style={{ display: 'inline-block', marginTop: '0.5rem', color: '#38bdf8', textDecoration: 'none', fontWeight: 'bold' }}
-                >
-                  → View on Pinata Gateway
-                </a>
-              </div>
-            )}
 
-            {/* Work description */}
-            {cidModal.workSubmission?.workDescription && (
-              <div style={{ marginBottom: '1.5rem' }}>
-                <h4 style={{ marginBottom: '0.5rem', fontSize: '0.9rem', fontWeight: 'bold', color: 'var(--text-secondary)' }}>
-                  Work Description:
-                </h4>
-                <p style={{ background: 'var(--bg2)', padding: '12px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
-                  {cidModal.workSubmission.workDescription}
-                </p>
-              </div>
-            )}
+                {/* Original IPFS CID (if available from backend) */}
+                {cidModal.workSubmission?.originalCid ? (
+                  <div style={{ marginBottom: '1.5rem' }}>
+                    <h4 style={{ marginBottom: '0.5rem', fontSize: '0.9rem', fontWeight: 'bold', color: 'var(--text-secondary)' }}>
+                      IPFS Content Hash:
+                    </h4>
+                    <div style={{ wordBreak: 'break-all', fontFamily: 'var(--font-mono)', fontSize: '12px', background: 'var(--bg2)', padding: '12px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)' }}>
+                      {cidModal.workSubmission.originalCid}
+                    </div>
+                    <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginTop: '0.5rem' }}>
+                      ipfs://{cidModal.workSubmission.originalCid}
+                    </p>
+                    <a 
+                      href={`https://gateway.pinata.cloud/ipfs/${cidModal.workSubmission.originalCid}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{ display: 'inline-block', marginTop: '0.5rem', color: '#38bdf8', textDecoration: 'none', fontWeight: 'bold' }}
+                    >
+                      → View on Pinata Gateway
+                    </a>
+                  </div>
+                ) : (
+                  <div style={{ marginBottom: '1.5rem', padding: '12px', background: 'var(--bg2)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
+                    Work submission data not available in database.
+                  </div>
+                )}
 
-            {/* File name */}
-            {cidModal.workSubmission?.fileName && (
-              <div>
-                <h4 style={{ marginBottom: '0.5rem', fontSize: '0.9rem', fontWeight: 'bold', color: 'var(--text-secondary)' }}>
-                  File Name:
-                </h4>
-                <p style={{ background: 'var(--bg2)', padding: '12px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)' }}>
-                  {cidModal.workSubmission.fileName}
-                </p>
-              </div>
+                {/* Work description */}
+                {cidModal.workSubmission?.workDescription && (
+                  <div style={{ marginBottom: '1.5rem' }}>
+                    <h4 style={{ marginBottom: '0.5rem', fontSize: '0.9rem', fontWeight: 'bold', color: 'var(--text-secondary)' }}>
+                      Work Description:
+                    </h4>
+                    <p style={{ background: 'var(--bg2)', padding: '12px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                      {cidModal.workSubmission.workDescription}
+                    </p>
+                  </div>
+                )}
+
+                {/* File name */}
+                {cidModal.workSubmission?.fileName && (
+                  <div>
+                    <h4 style={{ marginBottom: '0.5rem', fontSize: '0.9rem', fontWeight: 'bold', color: 'var(--text-secondary)' }}>
+                      File Name:
+                    </h4>
+                    <p style={{ background: 'var(--bg2)', padding: '12px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)' }}>
+                      {cidModal.workSubmission.fileName}
+                    </p>
+                  </div>
+                )}
+              </>
             )}
           </div>
         )}
