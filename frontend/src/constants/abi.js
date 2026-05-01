@@ -975,7 +975,7 @@
 
 
 
- export const ABI = [
+const ABI = [
   // Errors
   { inputs: [], name: "AlreadyRated", type: "error" },
   { inputs: [], name: "AlreadyRevealed", type: "error" },
@@ -1377,3 +1377,4 @@
 ];
 
 
+export default ABI;

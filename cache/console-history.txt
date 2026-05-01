@@ -1,0 +1,5 @@
+await contract.connect(freelancer).submitWork(1, "QmFakeCID123456njvroiniovnvfvf  uejfioeownv nvn");
+const job = await contract.getJob(1);
+const [client, freelancer] = await ethers.getSigners();
+);  "0x5FbDB2315678afecb367f032d93F642f64180aa3"  "FreelanceEscrow",const contract = await ethers.getContractAt(
+  "0x5FbDB2315678afecb367f032d93F642f64180aa3"  "FreelanceEscrow",
