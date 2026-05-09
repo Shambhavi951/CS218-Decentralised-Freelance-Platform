@@ -1377,6 +1377,3 @@ const ABI = [
 ];
 
 export default ABI;
-
-
-export default ABI;
