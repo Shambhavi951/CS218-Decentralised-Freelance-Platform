@@ -149,7 +149,11 @@ export const computeCid = async (text) => {
   );
 };
 
-const metaKey = (cid) => "cw_meta_" + cid;
+const metaKey = (cid) => {
+  // Normalize CID to lowercase for consistent key matching
+  const normalized = cid && typeof cid === 'string' ? cid.toLowerCase() : cid;
+  return "cw_meta_" + normalized;
+};
 
 export const saveMeta = (cid, data) => {
   try {

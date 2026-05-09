@@ -53,19 +53,24 @@ import ClientJobs from "./pages/client/Jobs";
 import Rate       from "./pages/client/Rate";
 import ClientReputation from "./pages/client/Reputation";
 
+// Shared pages
+import DiscountTokens from "./pages/DiscountTokens";
+
 /* ─── Tab definitions ──────────────────────────────────────────────── */
 const FREELANCER_TABS = [
-  { key: "services", label: "My Services" },
-  { key: "jobs",     label: "My Jobs"     },
-  { key: "rep",      label: "Reputation"  },
-  { key: "profile",  label: "Profile"     },
+  { key: "services",  label: "My Services" },
+  { key: "jobs",      label: "My Jobs"     },
+  { key: "discounts", label: "🎟 Discounts" },
+  { key: "rep",       label: "Reputation"  },
+  { key: "profile",   label: "Profile"     },
 ];
 
 const CLIENT_TABS = [
-  { key: "browse", label: "Browse & Hire" },
-  { key: "jobs",   label: "My Jobs"       },
-  { key: "rate",   label: "Rate & Review" },
-  { key: "rep",    label: "My Reputation" },
+  { key: "browse",    label: "Browse & Hire" },
+  { key: "jobs",      label: "My Jobs"       },
+  { key: "rate",      label: "Rate & Review" },
+  { key: "discounts", label: "🎟 Discounts"  },
+  { key: "rep",       label: "My Reputation" },
 ];
 
 /* ─── App ──────────────────────────────────────────────────────────── */
@@ -134,10 +139,11 @@ const App = () => {
               onSelect={setFreelancerTab}
               accent={accent}
             />
-            {freelancerTab === "services" && <Services   {...pageProps} />}
-            {freelancerTab === "jobs"     && <FreelancerJobs {...pageProps} />}
-            {freelancerTab === "rep"      && <Reputation  {...pageProps} />}
-            {freelancerTab === "profile"  && <Profile     {...pageProps} />}
+            {freelancerTab === "services"  && <Services   {...pageProps} />}
+            {freelancerTab === "jobs"       && <FreelancerJobs {...pageProps} />}
+            {freelancerTab === "discounts" && <DiscountTokens {...pageProps} />}
+            {freelancerTab === "rep"       && <Reputation  {...pageProps} />}
+            {freelancerTab === "profile"   && <Profile     {...pageProps} />}
           </>
         )}
 
@@ -160,8 +166,9 @@ const App = () => {
             {clientTab === "jobs" && (
               <ClientJobs {...pageProps} onRateNeeded={goToClientRate} />
             )}
-            {clientTab === "rate" && <Rate {...pageProps} />}
-            {clientTab === "rep" && <ClientReputation {...pageProps} />}
+            {clientTab === "rate"      && <Rate {...pageProps} />}
+            {clientTab === "discounts" && <DiscountTokens {...pageProps} />}
+            {clientTab === "rep"       && <ClientReputation {...pageProps} />}
           </>
         )}
       </main>

@@ -56,19 +56,11 @@ const FreelancerJobs = ({ account, signer, provider, toast }) => {
     if (!signer && !provider) return;
     try {
       const c = new ethers.Contract(CONTRACT_ADDRESS, ABI, provider ?? signer);
-      const rpc = provider ?? signer.provider ?? signer;
 
       // Debug: Log contract instance details
       console.log("Contract Address:", CONTRACT_ADDRESS);
       console.log("Provider:", provider ? "Connected" : "Not connected");
       console.log("Signer:", signer ? "Connected" : "Not connected");
-      const network = await rpc.getNetwork();
-      console.log("Network:", network);
-      const code = await rpc.getCode(CONTRACT_ADDRESS);
-      console.log("Contract code length:", code.length, "code present:", code !== "0x");
-      if (code === "0x") {
-        throw new Error(`No contract deployed at ${CONTRACT_ADDRESS} on chain ${network.chainId}. Check your network and deployment.`);
-      }
       console.log("Contract instance methods:", Object.keys(c).filter(k => typeof c[k] === 'function').slice(0, 20));
 
       // Check if stakes method exists
@@ -91,14 +83,14 @@ const FreelancerJobs = ({ account, signer, provider, toast }) => {
         const list = [];
         const reps = {};
         for (let i = 1; i <= cnt; i++) {
-          let j;
+          let j, sv;
           try {
             j = await c.getJob(i);
-          } catch (err) {
-            console.warn(`getJob(${i}) failed, trying jobs(${i}) fallback`, err);
-            j = await c.jobs(i);
+            sv = await c.getService(Number(j.serviceId));
+          } catch (e) {
+            console.warn(`Skipping job ${i} — could not decode:`, e.message);
+            continue;
           }
-          const sv = await c.getService(Number(j.serviceId));
           if (sv.freelancer.toLowerCase() !== account.toLowerCase()) continue;
 
           // Fetch client reputation if not already cached
@@ -153,6 +145,7 @@ const FreelancerJobs = ({ account, signer, provider, toast }) => {
             serviceId: Number(j.serviceId),
             status: Number(j.status),
             amount: j.amount.toString(),
+            cancellationFeeWei: (j.cancellationFeeWei ?? 0n).toString(),
             deadline: Number(j.deadline),
             submittedAt: Number(j.submittedAt),
             workCid: j.workCid,
@@ -171,14 +164,14 @@ const FreelancerJobs = ({ account, signer, provider, toast }) => {
         const finalizeList = [];
 
         for (let i = 1; i <= cnt; i++) {
-          let j;
+          let j, sv;
           try {
             j = await c.getJob(i);
-          } catch (err) {
-            console.warn(`getJob(${i}) failed in rate mode, trying jobs(${i}) fallback`, err);
-            j = await c.jobs(i);
+            sv = await c.getService(Number(j.serviceId));
+          } catch (e) {
+            console.warn(`Skipping job ${i} (rate) — could not decode:`, e.message);
+            continue;
           }
-          const sv = await c.getService(Number(j.serviceId));
 
           // Only show jobs where this freelancer is involved and job is completed
           if (sv.freelancer.toLowerCase() !== account.toLowerCase() || Number(j.status) !== 2) {
@@ -563,6 +556,15 @@ const FreelancerJobs = ({ account, signer, provider, toast }) => {
                     <div className="fjob-card__grid">
                       <div>Client <Chip addr={job.client} /></div>
                       <div>Escrow <b>{fmtEth(job.amount)}</b></div>
+                      {job.cancellationFeeWei && job.cancellationFeeWei !== "0" && (
+                        <div style={{ display: "flex", alignItems: "center", gap: "5px" }}>
+                          <span style={{ fontSize: "12px" }}>🛡</span>
+                          <span>
+                            Cancel payout{" "}
+                            <b style={{ color: "#f59e0b" }}>{fmtEth(job.cancellationFeeWei)}</b>
+                          </span>
+                        </div>
+                      )}
                       {job.status === 0 && (
                         <div>
                           Deadline{" "}

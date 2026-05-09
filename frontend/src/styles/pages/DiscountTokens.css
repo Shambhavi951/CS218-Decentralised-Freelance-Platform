@@ -1,0 +1,358 @@
+/* ──────────────────────────────────────────────────────────────────────────
+   DiscountTokens.css  —  styles for the discount token viewer page
+─────────────────────────────────────────────────────────────────────────── */
+
+/* ── Page header ─────────────────────────────────────────────────────────── */
+.dt-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+
+.dt-subtitle {
+  font-size: 13px;
+  color: var(--text2);
+  line-height: 1.6;
+  max-width: 520px;
+}
+
+/* ── Info card ───────────────────────────────────────────────────────────── */
+.dt-info-card {
+  margin-bottom: 20px !important;
+  background: linear-gradient(135deg, rgba(74, 222, 128, 0.05), rgba(56, 189, 248, 0.05)) !important;
+  border: 1px solid rgba(74, 222, 128, 0.15) !important;
+}
+
+.dt-info-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 16px;
+}
+
+.dt-info-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.dt-info-icon {
+  font-size: 22px;
+  flex-shrink: 0;
+}
+
+.dt-info-label {
+  font-size: 11px;
+  color: var(--text2);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-weight: 600;
+  margin-bottom: 2px;
+}
+
+.dt-info-value {
+  font-size: 13px;
+  color: var(--text);
+  font-weight: 500;
+}
+
+/* ── Filter row ──────────────────────────────────────────────────────────── */
+.dt-filter-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+
+.dt-filter-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border-radius: 20px;
+  border: 1px solid var(--border);
+  background: var(--card2);
+  color: var(--text2);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.18s ease;
+  font-family: var(--font-body);
+}
+
+.dt-filter-btn:hover {
+  border-color: var(--border2);
+  color: var(--text);
+}
+
+.dt-filter-btn--active {
+  background: rgba(74, 222, 128, 0.12);
+  border-color: rgba(74, 222, 128, 0.35);
+  color: #4ade80;
+}
+
+.dt-filter-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 9px;
+  background: var(--border2);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.dt-filter-btn--active .dt-filter-count {
+  background: rgba(74, 222, 128, 0.2);
+  color: #4ade80;
+}
+
+/* ── Token list ──────────────────────────────────────────────────────────── */
+.dt-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+/* ── Token card ──────────────────────────────────────────────────────────── */
+.dt-card {
+  border-left: 3px solid #4ade80;
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
+  animation: fadeUp 0.3s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.dt-card:hover {
+  transform: translateX(3px);
+}
+
+.dt-card__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+  flex-wrap: wrap;
+}
+
+.dt-card__id-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.dt-card__id {
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.dt-card__job-ref {
+  font-size: 12px;
+  color: var(--text2);
+  padding: 3px 10px;
+  background: var(--bg2);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+}
+
+.dt-card__badge {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 12px;
+  letter-spacing: 0.3px;
+}
+
+.dt-card__badge--active {
+  background: rgba(74, 222, 128, 0.12);
+  color: #4ade80;
+  border: 1px solid rgba(74, 222, 128, 0.25);
+}
+
+.dt-card__badge--redeemed {
+  background: rgba(245, 158, 11, 0.12);
+  color: #f59e0b;
+  border: 1px solid rgba(245, 158, 11, 0.25);
+}
+
+.dt-card__badge--expired {
+  background: rgba(107, 114, 128, 0.12);
+  color: #6b7280;
+  border: 1px solid rgba(107, 114, 128, 0.25);
+}
+
+.dt-card__body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* ── Discount amount ─────────────────────────────────────────────────────── */
+.dt-card__discount-amount {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 14px 16px;
+  background: linear-gradient(135deg, rgba(74, 222, 128, 0.08), rgba(56, 189, 248, 0.05));
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(74, 222, 128, 0.15);
+}
+
+.dt-card__discount-label {
+  font-size: 12px;
+  color: var(--text2);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.dt-card__discount-value {
+  font-family: var(--font-mono);
+  font-size: 18px;
+  font-weight: 700;
+  color: #4ade80;
+}
+
+.dt-card__discount-note {
+  font-size: 11px;
+  color: var(--text2);
+}
+
+/* ── Meta rows ───────────────────────────────────────────────────────────── */
+.dt-card__meta {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.dt-card__meta-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.dt-card__meta-label {
+  color: var(--text2);
+  min-width: 110px;
+}
+
+.dt-card__meta-val {
+  color: var(--text);
+  font-weight: 500;
+}
+
+.dt-card__time-left {
+  font-size: 12px;
+  color: #f59e0b;
+  font-weight: 500;
+  padding: 4px 10px;
+  background: rgba(245, 158, 11, 0.08);
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(245, 158, 11, 0.2);
+  width: fit-content;
+}
+
+/* ── Status banners ──────────────────────────────────────────────────────── */
+.dt-card__redeemed-banner {
+  font-size: 13px;
+  font-weight: 500;
+  color: #f59e0b;
+  padding: 10px 14px;
+  background: rgba(245, 158, 11, 0.08);
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(245, 158, 11, 0.2);
+}
+
+.dt-card__expired-banner {
+  font-size: 13px;
+  font-weight: 500;
+  color: #6b7280;
+  padding: 10px 14px;
+  background: rgba(107, 114, 128, 0.08);
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(107, 114, 128, 0.2);
+}
+
+/* ── Card actions ────────────────────────────────────────────────────────── */
+.dt-card__actions {
+  margin-top: 4px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  gap: 10px;
+}
+
+/* ── Confirm modal ───────────────────────────────────────────────────────── */
+.dt-confirm-amount {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  background: rgba(74, 222, 128, 0.08);
+  border: 1px solid rgba(74, 222, 128, 0.2);
+  border-radius: var(--radius-sm);
+  margin-bottom: 16px;
+}
+
+.dt-confirm-amount__label {
+  font-size: 13px;
+  color: var(--text2);
+  font-weight: 600;
+}
+
+.dt-confirm-amount__value {
+  font-family: var(--font-mono);
+  font-size: 20px;
+  font-weight: 700;
+  color: #4ade80;
+}
+
+/* ── Refresh button ──────────────────────────────────────────────────────── */
+.dt-refresh-btn {
+  padding: 7px 16px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--card2);
+  color: var(--text2);
+  font-size: 13px;
+  font-family: var(--font-body);
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.18s ease;
+  flex-shrink: 0;
+}
+
+.dt-refresh-btn:hover {
+  border-color: var(--border2);
+  color: var(--text);
+  background: var(--card);
+}
+
+/* ── Inline message boxes ────────────────────────────────────────────────── */
+.dt-tip-box {
+  font-size: 12.5px;
+  color: #38bdf8;
+  padding: 10px 14px;
+  background: rgba(56, 189, 248, 0.08);
+  border: 1px solid rgba(56, 189, 248, 0.2);
+  border-radius: var(--radius-sm);
+  line-height: 1.6;
+  margin-top: 12px;
+}
+
+.dt-warn-box {
+  font-size: 13px;
+  color: #f59e0b;
+  padding: 10px 14px;
+  background: rgba(245, 158, 11, 0.08);
+  border: 1px solid rgba(245, 158, 11, 0.2);
+  border-radius: var(--radius-sm);
+  line-height: 1.6;
+  margin-bottom: 16px;
+}

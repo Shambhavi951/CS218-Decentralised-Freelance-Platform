@@ -27,14 +27,6 @@ const ClientJobs = ({ account, signer, provider, toast, onRateNeeded }) => {
     if (!signer && !provider) return;
     try {
       const c = new ethers.Contract(CONTRACT_ADDRESS, ABI, provider ?? signer);
-      const rpc = provider ?? signer.provider ?? signer;
-      const network = await rpc.getNetwork();
-      console.log("ClientJobs network:", network);
-      const code = await rpc.getCode(CONTRACT_ADDRESS);
-      console.log("ClientJobs contract code length:", code.length, "code present:", code !== "0x");
-      if (code === "0x") {
-        throw new Error(`No contract deployed at ${CONTRACT_ADDRESS} on chain ${network.chainId}. Check your network and deployment.`);
-      }
       const svcCnt = Number(await c.serviceCount());
       const jobCnt = Number(await c.jobCount());
 
@@ -51,9 +43,9 @@ const ClientJobs = ({ account, signer, provider, toast, onRateNeeded }) => {
         let j;
         try {
           j = await c.getJob(i);
-        } catch (err) {
-          console.warn(`getJob(${i}) failed, trying jobs(${i}) fallback`, err);
-          j = await c.jobs(i);
+        } catch (e) {
+          console.warn(`Skipping job ${i} — could not decode:`, e.message);
+          continue;
         }
         if (j.client.toLowerCase() !== account.toLowerCase()) continue;
         const svc = svcMap[Number(j.serviceId)] ?? {};
@@ -105,6 +97,7 @@ const ClientJobs = ({ account, signer, provider, toast, onRateNeeded }) => {
           serviceId: Number(j.serviceId),
           status: Number(j.status),
           amount: j.amount.toString(),
+          cancellationFeeWei: (j.cancellationFeeWei ?? 0n).toString(),
           deadline: Number(j.deadline),
           submittedAt: Number(j.submittedAt),
           workCid: j.workCid,
@@ -249,6 +242,12 @@ const ClientJobs = ({ account, signer, provider, toast, onRateNeeded }) => {
                       </button>
                     </div>
                     <div>Escrow <b>{fmtEth(job.amount)}</b></div>
+                    {job.cancellationFeeWei && job.cancellationFeeWei !== "0" && (
+                      <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                        <span style={{ fontSize: "12px" }}>🛡</span>
+                        <span>Cancel fee <b style={{ color: "#f59e0b" }}>{fmtEth(job.cancellationFeeWei)}</b></span>
+                      </div>
+                    )}
                     {job.status === 0 && (
                       <div>
                         Deadline{" "}
@@ -420,6 +419,23 @@ const ClientJobs = ({ account, signer, provider, toast, onRateNeeded }) => {
               </>
             )}
           </div>
+        )}
+      </Modal>
+
+      {/* Freelancer Profile Modal */}
+      <Modal
+        open={!!profileModal}
+        onClose={() => setProfileModal(null)}
+        title="Freelancer Profile"
+        accent="#10b981"
+      >
+        {profileModal && (
+          <FreelancerProfile 
+            freelancerId={profileModal.freelancer}
+            context="hired"
+            jobContext={profileModal}
+            onClose={() => setProfileModal(null)}
+          />
         )}
       </Modal>
 

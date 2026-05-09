@@ -136,6 +136,10 @@ contract FreelanceEscrow is ReentrancyGuard {
     error ReviewWindowNotClosed();
     error DeadlineTooSoon();
     error DeadlineTooFar();
+    error DiscountTokenExpired();
+    error DiscountTokenAlreadyRedeemed();
+    error NotDiscountOwner();
+    error CancellationFeeExceedsAmount();
 
     // ─────────────────────────────────────────────
     //  ENUMS
@@ -162,17 +166,20 @@ contract FreelanceEscrow is ReentrancyGuard {
     /**
      * @dev slot 1: client(20) | serviceId(4) | status(1)              = 25 bytes
      *      slot 2: amount(16) | deadline(8) | submittedAt(8)          = 32 bytes
-     *      slot 3: workCid(32)                                        = 32 bytes
+     *      slot 3: cancellationFeeWei(16)                             = 16 bytes (partial)
+     *      slot 4: workCid(32)                                        = 32 bytes
+     *      slot 5: jobDescription(32)                                 = 32 bytes
      */
     struct Job {
-        address payable client;      // 20 bytes ─┐
-        uint32          serviceId;   //  4 bytes  │ slot 1
-        JobStatus       status;      //  1 byte   ┘
-        uint128         amount;      // 16 bytes ─┐
-        uint64          deadline;    //  8 bytes  │ slot 2
-        uint64          submittedAt; //  8 bytes  ┘
-        bytes32         workCid;     // 32 bytes ── slot 3
-        bytes32         jobDescription;     // 32 bytes ── slot 4 
+        address payable client;             // 20 bytes ─┐
+        uint32          serviceId;          //  4 bytes  │ slot 1
+        JobStatus       status;             //  1 byte   ┘
+        uint128         amount;             // 16 bytes ─┐
+        uint64          deadline;           //  8 bytes  │ slot 2
+        uint64          submittedAt;        //  8 bytes  ┘
+        uint128         cancellationFeeWei; // 16 bytes ── slot 3 (partial)
+        bytes32         workCid;            // 32 bytes ── slot 4
+        bytes32         jobDescription;     // 32 bytes ── slot 5
     }
 
     /**
@@ -190,6 +197,15 @@ contract FreelanceEscrow is ReentrancyGuard {
         uint64  reviewedAt;  //  8 bytes  │
         uint8   score;       //  1 byte   ┘
         uint256 expiry;      // 32 bytes ── slot 3
+    }
+
+    struct DiscountToken {
+        address  reviewer;         // 20 bytes ─┐ slot 1
+        uint32   jobId;            //  4 bytes  │
+        bool     redeemed;         //  1 byte  ─┘
+        uint128  discountWei;      // 16 bytes ─┐ slot 2
+        uint64   expiry;           //  8 bytes  │
+        uint64   feedbackTokenId;  //  8 bytes ─┘
     }
 
     /**
@@ -215,6 +231,8 @@ contract FreelanceEscrow is ReentrancyGuard {
     // ─────────────────────────────────────────────
 
     uint256 public constant MIN_STAKE = 0.05 ether;
+    uint16  public constant DISCOUNT_RATIO_BPS       = 500;     // 5%
+    uint256 public constant DISCOUNT_VALIDITY_PERIOD = 30 days;
 
     // ─────────────────────────────────────────────
     //  STORAGE
@@ -223,6 +241,7 @@ contract FreelanceEscrow is ReentrancyGuard {
     uint32  public serviceCount;
     uint32  public jobCount;
     uint256 public tokenCount;
+    uint256 public discountTokenCount;
 
     mapping(uint32  => Service)       public services;
     mapping(uint32  => Job)           public jobs;
@@ -232,6 +251,8 @@ contract FreelanceEscrow is ReentrancyGuard {
     mapping(uint256 => uint256[2])    public jobTokens;
     mapping(uint256 => mapping(address => Commit)) public commits;
     mapping(address => uint256)       public stakes;
+    mapping(uint256 => DiscountToken) public discountTokens;
+    mapping(address => uint256[])     public reviewerDiscounts;
 
     // ─────────────────────────────────────────────
     //  EVENTS
@@ -247,6 +268,8 @@ contract FreelanceEscrow is ReentrancyGuard {
     event FeedbackTokenIssued (uint256 indexed tokenId, address reviewer, address reviewee);
     event FeedbackSubmitted   (address indexed reviewer, uint256 jobId);
     event FeedbackApplied     (address indexed reviewer, address indexed reviewee, uint256 score, uint256 weight);
+    event DiscountTokenIssued (uint256 indexed discountId, address indexed reviewer, uint32 jobId, uint256 discountWei, uint256 expiry);
+    event DiscountTokenUsed   (uint256 indexed discountId, address indexed reviewer);
 
     // ─────────────────────────────────────────────
     //  INTERNAL HELPERS
@@ -382,6 +405,37 @@ contract FreelanceEscrow is ReentrancyGuard {
         emit FeedbackApplied(t.reviewer, t.reviewee, t.score, weight);
     }
 
+    function _issueDiscountToken(uint256 feedbackTokenId) internal {
+        FeedbackToken storage t = tokens[feedbackTokenId];
+        Job           storage j = jobs[t.jobId];
+
+        uint256 weight = _calculateWeight(
+            uint256(j.amount),
+            j.submittedAt,
+            t.reviewedAt,
+            t.expiry
+        );
+
+        uint256 discountWei = (uint256(j.amount) * weight * DISCOUNT_RATIO_BPS) / 10_000;
+
+        ++discountTokenCount;
+        uint256 dId     = discountTokenCount;
+        uint64  expires = uint64(block.timestamp + DISCOUNT_VALIDITY_PERIOD);
+
+        discountTokens[dId] = DiscountToken({
+            reviewer:        t.reviewer,
+            jobId:           t.jobId,
+            redeemed:        false,
+            discountWei:     uint128(discountWei),
+            expiry:          expires,
+            feedbackTokenId: uint64(feedbackTokenId)
+        });
+
+        reviewerDiscounts[t.reviewer].push(dId);
+
+        emit DiscountTokenIssued(dId, t.reviewer, t.jobId, discountWei, expires);
+    }
+
     // ─────────────────────────────────────────────
     //  1. STAKE MANAGEMENT
     // ─────────────────────────────────────────────
@@ -419,27 +473,29 @@ contract FreelanceEscrow is ReentrancyGuard {
     // ─────────────────────────────────────────────
     //  3. HIRE FREELANCER
     // ─────────────────────────────────────────────
-    
-    function hireFreelancer(uint32 serviceId, uint64 deadline, bytes32 jobDescription) external payable nonReentrant {
+
+    function hireFreelancer(uint32 serviceId, uint64 deadline, bytes32 jobDescription, uint128 cancellationFeeWei) external payable nonReentrant {
         Service storage s = services[serviceId];
 
-        if (s.freelancer == address(0))       revert InvalidService();
-        if (s.status != ServiceStatus.Listed) revert ServiceNotAvailable();
-        if (msg.value != s.priceWei)          revert IncorrectETH();
-        if (msg.sender == s.freelancer)       revert CannotHireYourself();
-        if (deadline < block.timestamp + 1 days)  revert DeadlineTooSoon();   // ← new guard
-        if (deadline > block.timestamp + 365 days) revert DeadlineTooFar();   // ← optional cap
+        if (s.freelancer == address(0))            revert InvalidService();
+        if (s.status != ServiceStatus.Listed)      revert ServiceNotAvailable();
+        if (msg.value != s.priceWei)               revert IncorrectETH();
+        if (msg.sender == s.freelancer)            revert CannotHireYourself();
+        if (deadline < block.timestamp + 1 days)   revert DeadlineTooSoon();
+        if (deadline > block.timestamp + 365 days) revert DeadlineTooFar();
+        if (cancellationFeeWei > msg.value)        revert CancellationFeeExceedsAmount();
 
         uint32 id = ++jobCount;
         jobs[id] = Job({
-            client:      payable(msg.sender),
-            serviceId:   serviceId,
-            status:      JobStatus.Active,
-            amount:      uint128(msg.value),
-            deadline:    deadline,             // ← use client input
-            submittedAt: 0,
-            workCid:     bytes32(0),
-            jobDescription: jobDescription
+            client:             payable(msg.sender),
+            serviceId:          serviceId,
+            status:             JobStatus.Active,
+            amount:             uint128(msg.value),
+            deadline:           deadline,
+            submittedAt:        0,
+            cancellationFeeWei: cancellationFeeWei,
+            workCid:            bytes32(0),
+            jobDescription:     jobDescription
         });
 
         s.status = ServiceStatus.Hired;
@@ -511,7 +567,10 @@ contract FreelanceEscrow is ReentrancyGuard {
 
     /**
      * @notice Cancel an Active or Submitted job and refund the client.
-     *         No feedback tokens are issued — job did not complete.
+     *         If the client voluntarily cancels, the agreed cancellationFeeWei
+     *         is sent to the freelancer and the remainder refunded to the client.
+     *         No cancellation fee is charged on freelancer-initiated or timeout
+     *         cancellations. No feedback tokens are issued — job did not complete.
      *
      * [NOTE timestamp] block.timestamp comparison against j.deadline is
      * intentional; ±15 s miner drift is inconsequential for 7-day windows.
@@ -523,19 +582,26 @@ contract FreelanceEscrow is ReentrancyGuard {
         if (j.status != JobStatus.Active && j.status != JobStatus.Submitted)
             revert InvalidJob();
 
-        bool isTimeout = block.timestamp > j.deadline;
+        bool isTimeout          = block.timestamp > j.deadline;
+        bool isClientCancelling = msg.sender == j.client;
 
         if (j.status == JobStatus.Submitted) {
-            if (msg.sender != j.client && !isTimeout)
+            if (!isClientCancelling && !isTimeout)
                 revert FreelancerCannotCancelSubmitted();
         } else {
-            if (msg.sender != j.client && msg.sender != s.freelancer && !isTimeout)
+            if (!isClientCancelling && msg.sender != s.freelancer && !isTimeout)
                 revert NotAllowed();
         }
 
         // ── Cache before state writes ────────────
-        address payable clientAddr = j.client;
-        uint256         payAmount  = j.amount;
+        address payable clientAddr     = j.client;
+        address payable freelancerAddr = s.freelancer;
+        uint256         payAmount      = j.amount;
+        // Fee only applies when the client voluntarily cancels — not on
+        // freelancer-initiated or timeout cancellations.
+        uint256         cancelFee      = isClientCancelling
+                                             ? uint256(j.cancellationFeeWei)
+                                             : 0;
 
         // ── Effects ──────────────────────────────
         j.status = JobStatus.Cancelled;
@@ -543,8 +609,13 @@ contract FreelanceEscrow is ReentrancyGuard {
 
         emit JobCancelled(jobId);
 
-        // ── Interaction ───────────────────────────
-        _safeTransfer(clientAddr, payAmount);
+        // ── Interactions ─────────────────────────
+        if (cancelFee > 0) {
+            _safeTransfer(freelancerAddr, cancelFee);
+            _safeTransfer(clientAddr, payAmount - cancelFee);
+        } else {
+            _safeTransfer(clientAddr, payAmount);
+        }
     }
 
     // ─────────────────────────────────────────────
@@ -628,6 +699,7 @@ contract FreelanceEscrow is ReentrancyGuard {
         t.score      = score;
         t.used       = true;
         t.reviewedAt = uint64(block.timestamp);
+        _issueDiscountToken(tokenId);
 
         emit FeedbackSubmitted(msg.sender, t.jobId);
 
@@ -713,5 +785,35 @@ contract FreelanceEscrow is ReentrancyGuard {
         returns (uint256 clientToken, uint256 freelancerToken)
     {
         return (jobTokens[jobId][0], jobTokens[jobId][1]);
+    }
+
+    function getDiscountToken(uint256 discountId)
+        external view
+        returns (DiscountToken memory)
+    {
+        return discountTokens[discountId];
+    }
+
+    function getReviewerDiscounts(address reviewer)
+        external view
+        returns (uint256[] memory)
+    {
+        return reviewerDiscounts[reviewer];
+    }
+
+    // ─────────────────────────────────────────────
+    //  14. DISCOUNT
+    // ─────────────────────────────────────────────
+
+    function useDiscountToken(uint256 discountId) external {
+        DiscountToken storage d = discountTokens[discountId];
+
+        if (d.redeemed)                 revert DiscountTokenAlreadyRedeemed();
+        if (block.timestamp > d.expiry) revert DiscountTokenExpired();
+        if (msg.sender != d.reviewer)   revert NotDiscountOwner();
+
+        d.redeemed = true;
+
+        emit DiscountTokenUsed(discountId, msg.sender);
     }
 }

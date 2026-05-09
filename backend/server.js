@@ -31,31 +31,32 @@ const WorkSubmission = mongoose.model("WorkSubmission", workSubmissionSchema);
  */
 app.post("/store-work-submission", async (req, res) => {
   try {
-    const { jobId, freelancer, cidHash, originalCid, workDescription } = req.body;
+    const { jobId, freelancer, cidHash, originalCid, workDescription, fileName } = req.body;
 
     console.log("📝 Received submission:", { jobId, freelancer, cidHashLen: cidHash?.length, cidHash, originalCid });
 
-    if (!jobId || !freelancer || !cidHash || !originalCid || !workDescription) {
+    // workDescription is optional — only jobId, freelancer, cidHash, originalCid are required
+    if (!jobId || !freelancer || !cidHash || !originalCid) {
       return res.status(400).json({
-        error: "Missing required fields: jobId, freelancer, cidHash, originalCid, workDescription"
+        error: "Missing required fields: jobId, freelancer, cidHash, originalCid"
       });
     }
 
-    // Check if work submission already exists for this job
-    const existing = await WorkSubmission.findOne({ jobId });
-    if (existing) {
-      return res.status(409).json({ error: "Work already submitted for this job" });
-    }
+    // Upsert: update if already exists, create otherwise
+    const workSubmission = await WorkSubmission.findOneAndUpdate(
+      { jobId },
+      {
+        jobId,
+        freelancer,
+        cidHash,
+        originalCid,
+        workDescription: workDescription || "",
+        status: "submitted"
+      },
+      { upsert: true, new: true, setDefaultsOnInsert: true }
+    );
 
-    const workSubmission = await WorkSubmission.create({
-      jobId,
-      freelancer,
-      cidHash,
-      originalCid,
-      workDescription
-    });
-
-    console.log("✅ Stored submission:", { jobId, cidHash });
+    console.log("✅ Stored/updated submission:", { jobId, cidHash });
 
     res.status(201).json({
       message: "Work submission stored successfully",
@@ -158,9 +159,15 @@ app.delete("/delete-work-submission/:jobId", async (req, res) => {
     const result = await WorkSubmission.findOneAndDelete({ jobId });
 
     if (!result) {
-      return res.status(404).json({ error: "Work submission not found" });
+      // Idempotent — if no record exists, still return 200 (already clean)
+      console.log("ℹ️ No work submission found for jobId:", jobId, "(already deleted or never saved)");
+      return res.json({
+        message: "Work submission not found (already clean)",
+        data: null
+      });
     }
 
+    console.log("🗑️ Deleted work submission for jobId:", jobId);
     res.json({
       message: "Work submission deleted successfully",
       data: result

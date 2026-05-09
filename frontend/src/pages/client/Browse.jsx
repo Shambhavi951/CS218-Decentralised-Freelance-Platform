@@ -17,6 +17,7 @@ const Browse = ({ account, signer, provider, toast, onHired }) => {
   const [freelancerReps, setFreelancerReps] = useState({}); // freelancer address -> {avg, total}
   const [profileModal, setProfileModal] = useState(null); // svc object | null
   const [jobDescription, setJobDescription] = useState("");
+  const [cancellationFee, setCancellationFee] = useState("");
   const [busy, setBusy] = useState(false);
 
   /* ── Load ─────────────────────────────────────────────────────────── */
@@ -76,6 +77,22 @@ const Browse = ({ account, signer, provider, toast, onHired }) => {
       return;
     }
 
+    // Validate cancellation fee
+    const priceWei = ethers.toBigInt(hireTarget.priceWei);
+    let cancellationFeeWei = 0n;
+    if (cancellationFee && cancellationFee.trim() !== "") {
+      try {
+        cancellationFeeWei = ethers.parseEther(cancellationFee.trim());
+      } catch {
+        toast("Invalid cancellation fee amount", "error");
+        return;
+      }
+      if (cancellationFeeWei > priceWei) {
+        toast("Cancellation fee cannot exceed the job price", "error");
+        return;
+      }
+    }
+
     setBusy(true);
     try {
       const activeSigner = signer ?? provider?.getSigner();
@@ -86,7 +103,20 @@ const Browse = ({ account, signer, provider, toast, onHired }) => {
       }
 
       const descText = jobDescription.trim();
+      
+      // Add validation - description can be empty but let's warn about it
+      if (!descText) {
+        console.warn("Job description is empty!");
+      }
+      
       const descriptionCID = await computeCid(descText);
+      
+      // Normalize to lowercase for consistent key matching
+      const descriptionCIDLower = descriptionCID.toLowerCase();
+      
+      console.log("Hire Flow - descText:", descText);
+      console.log("Hire Flow - descriptionCID (original):", descriptionCID);
+      console.log("Hire Flow - descriptionCID (normalized):", descriptionCIDLower);
 
       // Fetch client email from local profile
       let clientEmail = "";
@@ -101,16 +131,52 @@ const Browse = ({ account, signer, provider, toast, onHired }) => {
         }
       }
 
+     
+      // Fetch client email from local profile
+  
+
       saveMeta(descriptionCID, { 
         jobDescription: descText,
         clientEmail: clientEmail
       });
+      
+      console.log("Hire Flow - metadata saved with key:", `cw_meta_${descriptionCIDLower}`);
 
       const c = new ethers.Contract(CONTRACT_ADDRESS, ABI, activeSigner);
       const deadlineTimestamp = Math.floor(Date.now() / 1000) + (hireTarget.deadline * 86400);
-      const tx = await c.hireFreelancer(hireTarget.id, deadlineTimestamp, descriptionCID, {
-        value: hireTarget.priceWei,
-      });
+      
+      // Ensure all parameters are properly typed
+      const serviceId = Number(hireTarget.id); // uint32
+      const deadline = BigInt(deadlineTimestamp); // uint64
+      
+      // Ensure descriptionCID is properly formatted as bytes32
+      // SHA-256 produces 64 hex chars, add 0x prefix to make it valid bytes32
+      const jobDescriptionBytes32 = descriptionCIDLower.startsWith('0x')
+        ? descriptionCIDLower
+        : '0x' + descriptionCIDLower;
+      
+      // Verify it's exactly 66 chars (0x + 64 hex)
+      if (jobDescriptionBytes32.length !== 66) {
+        console.error("Invalid bytes32 format! Length:", jobDescriptionBytes32.length, "value:", jobDescriptionBytes32);
+        throw new Error("Invalid job description format");
+      }
+      
+      console.log("Hire Flow - Final Parameters:");
+      console.log("  serviceId:", serviceId);
+      console.log("  deadline:", deadline.toString());
+      console.log("  jobDescription:", jobDescriptionBytes32);
+      console.log("  cancellationFeeWei:", cancellationFeeWei.toString());
+      console.log("  value (ETH):", ethers.formatEther(ethers.toBigInt(hireTarget.priceWei)));
+      
+      const tx = await c.hireFreelancer(
+        serviceId,
+        deadline,
+        jobDescriptionBytes32,
+        cancellationFeeWei,
+        {
+          value: ethers.toBigInt(hireTarget.priceWei),
+        }
+      );
       toast("Payment locked in escrow…");
       await tx.wait();
       toast("Hired! Payment locked in escrow.", "success");
@@ -118,6 +184,7 @@ const Browse = ({ account, signer, provider, toast, onHired }) => {
       onHired?.();
       setHireTarget(null);
       setJobDescription("");
+      setCancellationFee("");
     } catch (e) {
       toast(e.reason ?? e.message ?? "Failed", "error");
     }
@@ -184,7 +251,7 @@ const Browse = ({ account, signer, provider, toast, onHired }) => {
       {/* Hire confirmation modal */}
       <Modal
         open={!!hireTarget}
-        onClose={() => { setHireTarget(null); setJobDescription(""); }}
+        onClose={() => { setHireTarget(null); setJobDescription(""); setCancellationFee(""); }}
         title="Confirm Hire"
         accent="#38bdf8"
       >
@@ -211,6 +278,56 @@ const Browse = ({ account, signer, provider, toast, onHired }) => {
                 onChange={(v) => setJobDescription(v)}
                 rows={4}
               />
+            </div>
+
+            {/* Cancellation Fee */}
+            <div className="cancellation-fee-section">
+              <div className="cancellation-fee__header">
+                <span className="cancellation-fee__label">🛡 Cancellation Protection Fee</span>
+                <span className="cancellation-fee__optional">optional</span>
+              </div>
+              <p className="cancellation-fee__desc">
+                If <strong>you</strong> cancel this job, this amount is paid to the freelancer
+                as compensation. Set to 0 for no penalty.
+              </p>
+              <div className="cancellation-fee__presets">
+                {[0, 10, 25, 50].map((pct) => {
+                  const feeEth = pct === 0 ? "0" :
+                    ethers.formatEther(
+                      (ethers.toBigInt(hireTarget.priceWei) * BigInt(pct)) / 100n
+                    );
+                  return (
+                    <button
+                      key={pct}
+                      className={`cancellation-fee__preset-btn${
+                        (pct === 0 && (cancellationFee === "" || cancellationFee === "0")) ||
+                        (pct !== 0 && cancellationFee === feeEth)
+                          ? " cancellation-fee__preset-btn--active" : ""
+                      }`}
+                      onClick={() => setCancellationFee(pct === 0 ? "" : feeEth)}
+                      type="button"
+                    >
+                      {pct}%
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="cancellation-fee__input-row">
+                <input
+                  id="cancellation-fee-input"
+                  type="number"
+                  min="0"
+                  step="0.0001"
+                  className="cancellation-fee__input"
+                  placeholder="0.0"
+                  value={cancellationFee}
+                  onChange={(e) => setCancellationFee(e.target.value)}
+                />
+                <span className="cancellation-fee__unit">ETH</span>
+                <span className="cancellation-fee__max">
+                  max {fmtEth(hireTarget.priceWei)}
+                </span>
+              </div>
             </div>
 
             <InfoBox color="#38bdf8" style={{ marginTop: "1rem" }}>

@@ -155,3 +155,123 @@
   font-weight: 600;
   color: var(--text1);
 }
+
+/* ── Cancellation Fee Section ──────────────────────────────────────────────── */
+.cancellation-fee-section {
+  margin-top: 1rem;
+  background: rgba(245, 158, 11, 0.06);
+  border: 1px solid rgba(245, 158, 11, 0.25);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+}
+
+.cancellation-fee__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+
+.cancellation-fee__label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #f59e0b;
+  letter-spacing: 0.2px;
+}
+
+.cancellation-fee__optional {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text3);
+  background: var(--bg2);
+  padding: 2px 7px;
+  border-radius: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.cancellation-fee__desc {
+  font-size: 12px;
+  color: var(--text2);
+  line-height: 1.5;
+  margin-bottom: 12px;
+}
+
+.cancellation-fee__desc strong {
+  color: var(--text1);
+}
+
+.cancellation-fee__presets {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.cancellation-fee__preset-btn {
+  flex: 1;
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text2);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 5px 0;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.cancellation-fee__preset-btn:hover {
+  border-color: #f59e0b;
+  color: #f59e0b;
+  background: rgba(245, 158, 11, 0.08);
+}
+
+.cancellation-fee__preset-btn--active {
+  background: rgba(245, 158, 11, 0.15);
+  border-color: #f59e0b;
+  color: #f59e0b;
+}
+
+.cancellation-fee__input-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.cancellation-fee__input {
+  flex: 1;
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text1);
+  font-size: 14px;
+  font-family: var(--font-mono);
+  padding: 7px 10px;
+  outline: none;
+  transition: border-color 0.15s;
+  -moz-appearance: textfield;
+}
+
+.cancellation-fee__input::-webkit-outer-spin-button,
+.cancellation-fee__input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.cancellation-fee__input:focus {
+  border-color: #f59e0b;
+}
+
+.cancellation-fee__unit {
+  font-size: 13px;
+  font-weight: 600;
+  color: #f59e0b;
+  font-family: var(--font-mono);
+}
+
+.cancellation-fee__max {
+  font-size: 11px;
+  color: var(--text3);
+  white-space: nowrap;
+}
+
