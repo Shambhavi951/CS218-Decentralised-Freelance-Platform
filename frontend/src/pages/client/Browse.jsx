@@ -87,7 +87,24 @@ const Browse = ({ account, signer, provider, toast, onHired }) => {
 
       const descText = jobDescription.trim();
       const descriptionCID = await computeCid(descText);
-      saveMeta(descriptionCID, { jobDescription: descText });
+
+      // Fetch client email from local profile
+      let clientEmail = "";
+      if (account) {
+        const profileStr = localStorage.getItem(`profile_${account.toLowerCase()}`);
+        if (profileStr) {
+          try {
+            clientEmail = JSON.parse(profileStr).email || "";
+          } catch (e) {
+            console.warn("Failed to parse client profile", e);
+          }
+        }
+      }
+
+      saveMeta(descriptionCID, { 
+        jobDescription: descText,
+        clientEmail: clientEmail
+      });
 
       const c = new ethers.Contract(CONTRACT_ADDRESS, ABI, activeSigner);
       const deadlineTimestamp = Math.floor(Date.now() / 1000) + (hireTarget.deadline * 86400);

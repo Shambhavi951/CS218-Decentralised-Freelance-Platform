@@ -47,7 +47,7 @@ export default function FreelancerProfile({
       );
     }
 
-    const { displayName, bio, selectedIcon, portfolio } = profileData || {};
+    const { displayName, email, bio, selectedIcon, portfolio } = profileData || {};
 
     return (
       <div className="freelancer-profile-view">
@@ -72,6 +72,45 @@ export default function FreelancerProfile({
             <span style={{ color: "#666", fontSize: "14px" }}>
               ({reputation.total || reputation.jobs || 0} jobs)
             </span>
+          </div>
+        )}
+
+        {email && (
+          <div style={{ marginBottom: "24px" }}>
+            <h4 style={{ margin: "0 0 8px", color: "var(--text)" }}>Contact Info</h4>
+            <div style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "14px",
+              padding: "16px",
+              background: "var(--sky-bg)",
+              border: "1px solid rgba(56, 189, 248, 0.2)",
+              borderRadius: "10px",
+              boxShadow: "0 2px 4px rgba(0, 0, 0, 0.2)"
+            }}>
+              <div style={{
+                background: "var(--sky-bg)",
+                color: "var(--sky)",
+                padding: "10px",
+                borderRadius: "50%",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center"
+              }}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path><polyline points="22,6 12,13 2,6"></polyline></svg>
+              </div>
+              <div>
+                <div style={{ fontSize: "12px", color: "var(--text2)", fontWeight: "600", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: "2px" }}>Email Address</div>
+                <a 
+                  href={`mailto:${email}`}
+                  style={{ color: "var(--sky)", textDecoration: "none", fontWeight: "500", fontSize: "15px", display: "inline-block", transition: "all 0.2s" }}
+                  onMouseOver={(e) => { e.currentTarget.style.textDecoration = 'underline'; e.currentTarget.style.opacity = '0.8'; }}
+                  onMouseOut={(e) => { e.currentTarget.style.textDecoration = 'none'; e.currentTarget.style.opacity = '1'; }}
+                >
+                  {email}
+                </a>
+              </div>
+            </div>
           </div>
         )}
 

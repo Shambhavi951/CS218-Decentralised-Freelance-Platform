@@ -10,6 +10,7 @@ export default function Profile({ account, provider, toast, accent }) {
   
   // Profile state
   const [displayName, setDisplayName] = useState("");
+  const [email, setEmail] = useState("");
   const [bio, setBio] = useState("");
   const [selectedIcon, setSelectedIcon] = useState(ICON_SEEDS[0]);
   const [portfolio, setPortfolio] = useState([]);
@@ -39,12 +40,14 @@ export default function Profile({ account, provider, toast, accent }) {
     if (saved) {
       const data = JSON.parse(saved);
       setDisplayName(data.displayName || "");
+      setEmail(data.email || "");
       setBio(data.bio || "");
       setSelectedIcon(data.selectedIcon || ICON_SEEDS[0]);
       setPortfolio(data.portfolio || []);
     } else {
         // Reset if no profile found for this account
         setDisplayName("");
+        setEmail("");
         setBio("");
         setSelectedIcon(ICON_SEEDS[0]);
         setPortfolio([]);
@@ -53,7 +56,33 @@ export default function Profile({ account, provider, toast, accent }) {
   }, [account, fetchBalance]);
 
   const saveProfile = () => {
-    const data = { displayName, bio, selectedIcon, portfolio };
+    if (!email || email.trim() === "") {
+      toast("Email cannot be empty", "error");
+      return;
+    }
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      toast("Please enter a valid email address", "error");
+      return;
+    }
+
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key.startsWith("profile_") && key !== `profile_${account.toLowerCase()}`) {
+        try {
+          const profileData = JSON.parse(localStorage.getItem(key));
+          if (profileData && profileData.email && profileData.email.toLowerCase() === email.toLowerCase()) {
+            toast("This email is already registered to another account", "error");
+            return;
+          }
+        } catch (e) {
+          // ignore
+        }
+      }
+    }
+
+    const data = { displayName, email, bio, selectedIcon, portfolio };
     localStorage.setItem(`profile_${account.toLowerCase()}`, JSON.stringify(data));
     toast("Profile updated successfully!", "success");
   };
@@ -96,7 +125,43 @@ export default function Profile({ account, provider, toast, accent }) {
               />
             </div>
             <h3 style={{ margin: "16px 0 8px" }}>{displayName || "Unnamed Freelancer"}</h3>
-            <Chip addr={account} />
+            <div style={{ display: "flex", justifyContent: "center", marginBottom: "16px" }}>
+              <Chip addr={account} />
+            </div>
+            
+            {email && (
+              <div style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "10px",
+                padding: "12px 16px",
+                background: "var(--sky-bg)",
+                border: "1px solid rgba(56, 189, 248, 0.2)",
+                borderRadius: "8px",
+                margin: "0 auto 16px auto",
+                width: "fit-content",
+                textAlign: "left",
+                boxShadow: "0 1px 2px rgba(0, 0, 0, 0.2)"
+              }}>
+                <div style={{
+                  color: "var(--sky)",
+                  display: "flex",
+                  alignItems: "center",
+                }}>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path><polyline points="22,6 12,13 2,6"></polyline></svg>
+                </div>
+                <div>
+                  <a 
+                    href={`mailto:${email}`}
+                    style={{ color: "var(--sky)", textDecoration: "none", fontWeight: "500", fontSize: "14px", transition: "all 0.2s" }}
+                    onMouseOver={(e) => { e.currentTarget.style.textDecoration = 'underline'; e.currentTarget.style.opacity = '0.8'; }}
+                    onMouseOut={(e) => { e.currentTarget.style.textDecoration = 'none'; e.currentTarget.style.opacity = '1'; }}
+                  >
+                    {email}
+                  </a>
+                </div>
+              </div>
+            )}
             
             <div style={{ marginTop: "24px", paddingTop: "24px", borderTop: "1px solid #eee" }}>
               <div style={{ fontSize: "14px", color: "#666", marginBottom: "4px" }}>Account Balance</div>
@@ -147,6 +212,13 @@ export default function Profile({ account, provider, toast, accent }) {
                 value={displayName} 
                 onChange={setDisplayName} 
                 placeholder="e.g. John Doe"
+              />
+              <Input 
+                label="Email Address" 
+                value={email} 
+                onChange={setEmail} 
+                placeholder="e.g. john@example.com"
+                type="email"
               />
               <Textarea 
                 label="Bio / About" 
