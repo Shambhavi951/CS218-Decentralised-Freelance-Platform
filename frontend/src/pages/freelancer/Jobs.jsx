@@ -56,11 +56,19 @@ const FreelancerJobs = ({ account, signer, provider, toast }) => {
     if (!signer && !provider) return;
     try {
       const c = new ethers.Contract(CONTRACT_ADDRESS, ABI, provider ?? signer);
+      const rpc = provider ?? signer.provider ?? signer;
 
       // Debug: Log contract instance details
       console.log("Contract Address:", CONTRACT_ADDRESS);
       console.log("Provider:", provider ? "Connected" : "Not connected");
       console.log("Signer:", signer ? "Connected" : "Not connected");
+      const network = await rpc.getNetwork();
+      console.log("Network:", network);
+      const code = await rpc.getCode(CONTRACT_ADDRESS);
+      console.log("Contract code length:", code.length, "code present:", code !== "0x");
+      if (code === "0x") {
+        throw new Error(`No contract deployed at ${CONTRACT_ADDRESS} on chain ${network.chainId}. Check your network and deployment.`);
+      }
       console.log("Contract instance methods:", Object.keys(c).filter(k => typeof c[k] === 'function').slice(0, 20));
 
       // Check if stakes method exists
@@ -83,7 +91,13 @@ const FreelancerJobs = ({ account, signer, provider, toast }) => {
         const list = [];
         const reps = {};
         for (let i = 1; i <= cnt; i++) {
-          const j = await c.getJob(i);
+          let j;
+          try {
+            j = await c.getJob(i);
+          } catch (err) {
+            console.warn(`getJob(${i}) failed, trying jobs(${i}) fallback`, err);
+            j = await c.jobs(i);
+          }
           const sv = await c.getService(Number(j.serviceId));
           if (sv.freelancer.toLowerCase() !== account.toLowerCase()) continue;
 
@@ -146,7 +160,13 @@ const FreelancerJobs = ({ account, signer, provider, toast }) => {
         const finalizeList = [];
 
         for (let i = 1; i <= cnt; i++) {
-          const j = await c.getJob(i);
+          let j;
+          try {
+            j = await c.getJob(i);
+          } catch (err) {
+            console.warn(`getJob(${i}) failed in rate mode, trying jobs(${i}) fallback`, err);
+            j = await c.jobs(i);
+          }
           const sv = await c.getService(Number(j.serviceId));
 
           // Only show jobs where this freelancer is involved and job is completed

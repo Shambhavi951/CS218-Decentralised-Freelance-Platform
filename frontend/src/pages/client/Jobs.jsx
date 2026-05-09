@@ -27,6 +27,14 @@ const ClientJobs = ({ account, signer, provider, toast, onRateNeeded }) => {
     if (!signer && !provider) return;
     try {
       const c = new ethers.Contract(CONTRACT_ADDRESS, ABI, provider ?? signer);
+      const rpc = provider ?? signer.provider ?? signer;
+      const network = await rpc.getNetwork();
+      console.log("ClientJobs network:", network);
+      const code = await rpc.getCode(CONTRACT_ADDRESS);
+      console.log("ClientJobs contract code length:", code.length, "code present:", code !== "0x");
+      if (code === "0x") {
+        throw new Error(`No contract deployed at ${CONTRACT_ADDRESS} on chain ${network.chainId}. Check your network and deployment.`);
+      }
       const svcCnt = Number(await c.serviceCount());
       const jobCnt = Number(await c.jobCount());
 
@@ -40,7 +48,13 @@ const ClientJobs = ({ account, signer, provider, toast, onRateNeeded }) => {
 
       const list = [];
       for (let i = 1; i <= jobCnt; i++) {
-        const j = await c.getJob(i);
+        let j;
+        try {
+          j = await c.getJob(i);
+        } catch (err) {
+          console.warn(`getJob(${i}) failed, trying jobs(${i}) fallback`, err);
+          j = await c.jobs(i);
+        }
         if (j.client.toLowerCase() !== account.toLowerCase()) continue;
         const svc = svcMap[Number(j.serviceId)] ?? {};
 
@@ -361,23 +375,6 @@ const ClientJobs = ({ account, signer, provider, toast, onRateNeeded }) => {
               </>
             )}
           </div>
-        )}
-      </Modal>
-
-      {/* Freelancer Profile Modal */}
-      <Modal
-        open={!!profileModal}
-        onClose={() => setProfileModal(null)}
-        title="Freelancer Profile"
-        accent="#10b981"
-      >
-        {profileModal && (
-          <FreelancerProfile 
-            freelancerId={profileModal.freelancer}
-            context="hired"
-            jobContext={profileModal}
-            onClose={() => setProfileModal(null)}
-          />
         )}
       </Modal>
 
